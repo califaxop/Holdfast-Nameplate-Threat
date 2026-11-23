@@ -66,7 +66,7 @@ end)
 ---------------------------------------------------------------------------
 -- Slash commands
 ---------------------------------------------------------------------------
-local TOGGLES = { icon = "showIcon", percent = "showPercent" }
+local TOGGLES = { icon = "showIcon" }
 
 SLASH_HOLDFAST1 = "/hf"
 SLASH_HOLDFAST2 = "/holdfast"
@@ -164,18 +164,18 @@ SlashCmdList.HOLDFAST = function(msg)
         "| role:", S.Role(true) or "not set")
       for unit in R.Each() do
         n = n + 1
-        local t, s, p = UnitDetailedThreatSituation(tank or "player", unit)
+        local okS, sit = pcall(UnitThreatSituation, "player", unit)
+        local okL, lead = pcall(function() return UnitThreatLeadSituation and UnitThreatLeadSituation(tank or "player", unit) end)
         local st = S.Get(unit)
-        ns.Dbg(unit, "isTanking=" .. show(t), "status=" .. show(s), "pct=" .. show(p),
-          "tooltip=" .. tostring(S.TooltipPct and S.TooltipPct(unit) or "none"),
-          "-> " .. (st and st.kind or "?") .. (st and st.via and (" (from " .. st.via .. ")") or ""))
+        ns.Dbg(unit, "step (you)=" .. (okS and show(sit) or "error"), "lead (" .. (tank or "you") .. ")=" .. (okL and show(lead) or "error"),
+          "-> " .. (st and st.kind or "?"))
       end
       ns.Dbg("nameplates tracked:", n, "| client can show hidden values:",
         V.HasSecretSupport() and "yes" or "no",
-        "| hidden threat % checks:", ns.curveState)
+        "| hidden states turned into glows:", ns.curveState)
     end
   else
-    ns.Print("/hf (settings)  -  /hf icon | percent | aggro  -  /hf debug  -  /hf tank")
+    ns.Print("/hf (settings)  -  /hf icon | aggro  -  /hf debug  -  /hf tank")
     return
   end
   UpdateAll()

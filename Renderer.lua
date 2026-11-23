@@ -364,6 +364,42 @@ local function ThresholdCurve()
   return curve
 end
 
+-- The game's threat step (0-3) -> which glow shows, as step curves the game evaluates for us when
+-- the step is hidden (we never read it). Tank (lead): 0 holding, 1-2 someone close, 3 lost.
+-- Not the tank: 0 safe, 1 about to pull, 2-3 on you.
+local stepCurves = {}
+local function Curve(points)
+  if not (C_CurveUtil and C_CurveUtil.CreateCurve) then return nil end
+  local ok, c = pcall(C_CurveUtil.CreateCurve)
+  if not ok or not c then return nil end
+  if Enum and Enum.LuaCurveType and c.SetType then pcall(c.SetType, c, Enum.LuaCurveType.Step) end
+  for _, p in ipairs(points) do
+    if not pcall(c.AddPoint, c, p[1], p[2]) then return nil end
+  end
+  return c
+end
+local function StepCurves(dps)
+  local key = dps and "dps" or "tank"
+  if stepCurves[key] == nil then
+    local t = {
+      aggro = Curve({ { 0, 1 }, { 1, 0 } }),
+      unstable = Curve(dps and { { 0, 0 }, { 1, 1 }, { 2, 0 } } or { { 0, 0 }, { 1, 1 }, { 3, 0 } }),
+      nothreat = Curve(dps and { { 0, 0 }, { 2, 1 } } or { { 0, 0 }, { 3, 1 } }),
+      never = Curve({ { 0, 0 } }),
+    }
+    stepCurves[key] = (t.aggro and t.unstable and t.nothreat and t.never) and t or false
+    if not stepCurves[key] then ns.curveState = "unsupported" end
+  end
+  return stepCurves[key] or nil
+end
+-- `frame`'s alpha from `curve` at the hidden `step`; false if the client won't
+local function Gate(frame, curve, step)
+  local ok, v = pcall(curve.Evaluate, curve, step)
+  if ok and v ~= nil and pcall(frame.SetAlpha, frame, v) then ns.curveState = "works"; return true end
+  ns.curveState = "unsupported"
+  return false
+end
+
 -- Set `frame`'s alpha to 1 when the hidden percentage is at/above the threshold, else 0.
 local function GateFromHiddenPct(frame, pct)
   local c = ThresholdCurve()
@@ -385,7 +421,7 @@ local function Create(plate, parent, bar, kind, src)
   local f = CreateFrame("Frame", nil, parent)
   f:SetFrameLevel(bar:GetFrameLevel() + 2) -- just above the bar/border
   f.kind, f.src = kind, src
-  f.uf, f.plate, f.outer, f.watching = false, plate, false, false
+  f.uf, f.plate, f.outer, f.watching, f.flareHooked = false, plate, false, false, false
   if kind == "blizzard" then f.uf = parent end -- (the game's plate: what sits left of its bar, see LeftOf)
 
   f:SetAllPoints(bar)
@@ -550,6 +586,25 @@ local function WatchLeft(f)
   end
 end
 
+-- The game's own aggro highlight (Options > Nameplates > Aggro Display: Progressive): a flare along
+-- the top of the bar. On the plates we draw, ours replaces it (setting "Replace the game's aggro
+-- highlight"): hidden whenever the game shows it. Its Flash and Health Bar Color options stay its own.
+local function HideGameFlare(uf)
+  for _, k in ipairs({ "aggroHighlightBase", "aggroHighlightAdditive" }) do
+    local t = T(uf[k])
+    if t and t.Hide then pcall(t.Hide, t) end
+  end
+end
+local function WatchGameFlare(f)
+  if f.flareHooked or not T(f.uf) then return end
+  f.flareHooked = true
+  if hooksecurefunc and type(f.uf.UpdateAggroHighlight) == "function" then
+    pcall(hooksecurefunc, f.uf, "UpdateAggroHighlight", function(uf)
+      if ns.db and ns.db.enabled ~= false and ns.db.replaceGameHighlight then HideGameFlare(uf) end
+    end)
+  end
+end
+
 local function Sets(dps)
   local db = ns.db
   if dps then return db.statesDps, db.colorsDps end
@@ -563,8 +618,8 @@ local function Style(f, dps, plate)
   local db = ns.db
   local st, col = Sets(dps)
   StyleFlash(f.aggro, col.aggro, st.aggro.alpha, st.aggro.speed or 0.5, false)
-  -- the "!" marks "it's on you" (or lost, as the tank); not "close", where the % says it
-  StyleFlash(f.unstable, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, db.showIcon and not dps)
+  -- the "!" marks "it's on you" (or lost, as the tank)
+  StyleFlash(f.unstable, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, false)
   StyleFlash(f.nothreat, col.nothreat, st.nothreat.alpha, st.nothreat.speed or 0.25, db.showIcon)
   for _, g in ipairs(f.gates) do StyleFlash(g.flash, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, db.showIcon) end
 end
@@ -618,6 +673,7 @@ function Render(plate, state, unit)
   end
   if not f then f = Create(plate, parent, bar, kind, src); indicators[plate] = f end
   f:Show()
+  if f.uf and ns.db.replaceGameHighlight then WatchGameFlare(f); HideGameFlare(f.uf) end
   local dps = state and state.dps or false
   Style(f, dps, plate)
   local db = ns.db
@@ -627,101 +683,41 @@ function Render(plate, state, unit)
   f.aggro.holder:SetAlpha(1); f.unstable.holder:SetAlpha(1); f.nothreat.holder:SetAlpha(1)
 
   if kind == "none" then HideAll(f); return end
+  HideGates(f); f.pct:Hide() -- (no threat % any more: the game's states only)
+  if kind == "insecure" and not st.unstable.show then kind = "secure" end
 
   if kind == "hidden" then
-    -- Threat values are hidden: the client shows/hides each glow from the hidden
-    -- "am I tanking" flag. It can't tell stable from unstable, so tanking = stable here.
-    local t = state.isTanking
-    ShowFlash(f.unstable, false)
-    if dps then
-      HideGates(f); f.pct:Hide()
-      if f.SetAlphaFromBoolean and (isSecret(t) or t ~= nil) then
-        ShowFlash(f.aggro, st.aggro.show, st.aggro.flash)
-        f.aggro.holder:SetAlphaFromBoolean(t, 0, 1)
-        ShowFlash(f.nothreat, st.nothreat.show, st.nothreat.flash)
-        f.nothreat.holder:SetAlphaFromBoolean(t, 1, 0)
-      else
-        ShowFlash(f.aggro, false); ShowFlash(f.nothreat, false)
-      end
-      return
-    end
-    if state.warn and f.SetAlphaFromBoolean and (isSecret(t) or t ~= nil) then
-      -- your pet tanks and you're catching up (from the tooltip): orange while your pet has it,
-      -- red if it doesn't
-      ShowFlash(f.aggro, false)
+    -- The game hides the threat state: it turns the hidden step into each glow's visibility
+    -- itself (step curves), so the right one shows without us reading it.
+    local curves = StepCurves(dps)
+    if curves and state.step ~= nil then
+      ShowFlash(f.aggro, st.aggro.show, st.aggro.flash)
       ShowFlash(f.unstable, st.unstable.show, st.unstable.flash)
-      f.unstable.holder:SetAlphaFromBoolean(t, 1, 0)
       ShowFlash(f.nothreat, st.nothreat.show, st.nothreat.flash)
-      f.nothreat.holder:SetAlphaFromBoolean(t, 0, 1)
-      HideGates(f)
-      if db.showPercent and state.pct then
-        local c = col.unstable
-        f.pct:SetAlpha(1); f.pct:SetFormattedText("%d%%", Cap(state.pct)); f.pct:SetTextColor(c[1], c[2], c[3]); f.pct:Show()
-      else
-        f.pct:Hide()
-      end
-      return
+      local ok = Gate(f.aggro.holder, curves.aggro, state.step)
+        and Gate(f.unstable.holder, st.unstable.show and curves.unstable or curves.never, state.step)
+        and Gate(f.nothreat.holder, curves.nothreat, state.step)
+      if ok then return end
     end
+    -- (this client can't: from the hidden "is it on you" flag, on you or not)
+    ShowFlash(f.unstable, false)
+    local t = state.isTanking
     if f.SetAlphaFromBoolean and (isSecret(t) or t ~= nil) then
       ShowFlash(f.aggro, st.aggro.show, st.aggro.flash)
-      f.aggro.holder:SetAlphaFromBoolean(t, 1, 0)
       ShowFlash(f.nothreat, st.nothreat.show, st.nothreat.flash)
-      f.nothreat.holder:SetAlphaFromBoolean(t, 0, 1)
-      -- (as the tank yourself it's just holding / lost; the old "someone's close" gates are off)
-      local others = state.others or {}
-      if state.tank == "pet" and st.unstable.show and #others > 0 and ns.curveState ~= "unsupported" then
-        f.hidTank:Show()
-        f.hidTank:SetAlphaFromBoolean(t, 1, 0)
-        for i, g in ipairs(f.gates) do
-          local p = others[i]
-          if p ~= nil and GateFromHiddenPct(g.frame, p) then ShowFlash(g.flash, true, st.unstable.flash)
-          else ShowFlash(g.flash, false) end
-        end
-      else
-        HideGates(f)
-      end
+      -- as the tank, it being on you is good; not the tank, it's the bad one
+      f.aggro.holder:SetAlphaFromBoolean(t, dps and 0 or 1, dps and 1 or 0)
+      f.nothreat.holder:SetAlphaFromBoolean(t, dps and 1 or 0, dps and 0 or 1)
     else
-      ShowFlash(f.aggro, false); ShowFlash(f.nothreat, false); HideGates(f)
+      ShowFlash(f.aggro, false); ShowFlash(f.nothreat, false)
     end
-    f.pct:Hide() -- hidden values and no tooltip line: no number to show
     return
   end
 
-  -- readable values: three states
-  HideGates(f)
-  -- with your pet as the tank, "pulling" means it's on you and your pet is winning it back: still red
-  if kind == "pulling" and state.tank == "pet" then kind = "lost" end
-  -- you're the tank: just holding it or not
-  local meTank = not dps and state.tank == "player"
-  if meTank then
-    if kind == "insecure" then kind = "secure" elseif kind == "pulling" then kind = "lost" end
-  end
-  -- unstable: the tank's hold is slipping, or (pulling) it's about to land on the tank
-  if kind == "insecure" and not st.unstable.show then kind = "secure" end
-  if kind == "pulling" and not st.unstable.show then kind = "lost" end
-  local stable   = (kind == "secure")
-  local unstable = (kind == "insecure" or kind == "pulling")
-  local noThreat = (kind == "lost")
-  ShowFlash(f.aggro, stable and st.aggro.show, st.aggro.flash)
-  ShowFlash(f.unstable, unstable, st.unstable.flash)
-  ShowFlash(f.nothreat, noThreat and st.nothreat.show, st.nothreat.flash)
-
-  -- threat %: yours when you're not the tank; with a pet tanking, how close you are to pulling it
-  local pct, color
-  if db.showPercent and not meTank then -- not the tank (or your pet tanks): your %; tanks get the "!" only
-    if noThreat then
-      -- at 100% it's on you: the "!" takes the number's place (the number stays without the "!")
-      if not db.showIcon then pct, color = state.pct, col.nothreat end
-    elseif kind == "pulling" then pct, color = state.pct, col.unstable
-    elseif unstable then pct, color = state.closest or state.pct, col.unstable
-    elseif stable then pct, color = state.closest or state.pct, col.aggro end
-  end
-  if pct then
-    f.pct:SetAlpha(1)
-    f.pct:SetFormattedText("%d%%", Cap(pct)); f.pct:SetTextColor(color[1], color[2], color[3]); f.pct:Show()
-  else
-    f.pct:Hide()
-  end
+  -- readable: three states
+  ShowFlash(f.aggro, kind == "secure" and st.aggro.show, st.aggro.flash)
+  ShowFlash(f.unstable, kind == "insecure", st.unstable.flash)
+  ShowFlash(f.nothreat, kind == "lost" and st.nothreat.show, st.nothreat.flash)
 end
 
 function V.Hide(plate)

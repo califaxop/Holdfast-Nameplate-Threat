@@ -170,20 +170,16 @@ local function BuildPanel(panel)
     sw.Refresh = function() sr(); name:SetText(label()[2]) end
     y = y - 32
   end
-  track(at(UI.Slider(panel, "Warn at (not the tank / pet tanking)", 380, 50, 100, 5,
-    { function() return ns.db.unstableAt end, function(v) ns.db.unstableAt = math.floor(v + 0.5) end },
-    function(v) return math.floor(v + 0.5) .. "% of pulling" end, Changed), 26, y - 6))
-
   -- glow style (every state)
-  at(UI.Text(panel, "line", "Glow style"), 26, y - 50)
+  at(UI.Text(panel, "line", "Glow style"), 26, y - 10)
   track(at(UI.Selector(panel, 300, {
       { "auto", "Auto (matches your nameplates)" }, { "border", "Nameplate border" }, { "outline", "Outline" },
       { "pixel", "Pixel lines" }, { "autocast", "Autocast sparkles" } },
     S("glowStyle"), function() ns.Renderer.Rebuild(); Changed() end,
-    "How the glow looks, for every state. Auto: the game's nameplate border, or a clean outline on FlareUI's and EllesmereUI's flat nameplates. Pixel lines and Autocast sparkles move round the plate."), 120, y - 46))
+    "How the glow looks, for every state. Auto: the game's nameplate border, or a clean outline on FlareUI's and EllesmereUI's flat nameplates. Pixel lines and Autocast sparkles move round the plate."), 120, y - 6))
 
   -- Display ----------------------------------------------------------------
-  y = y - 90
+  y = y - 50
   at(UI.Section(panel, "Display", W_), 26, y); y = y - 32
   track(at(UI.Check(panel, "Only in a party or raid (or when my pet tanks)", S("onlyInGroup"), W_, Changed), 26, y))
   local iconDist
@@ -197,25 +193,19 @@ local function BuildPanel(panel)
   icon.Refresh = function()
     ir(); iconDist.Refresh(); iconDist:SetAlpha(ns.db.showIcon and 1 or 0.4)
   end
-  local pct, nx
-  pct = track(at(UI.Check(panel, "Show threat % on nameplate", S("showPercent"), W_, function()
-    Changed(); pct.Refresh()
-  end), 26, y - 94))
-  nx = track(at(UI.Slider(panel, "% distance from the nameplate", 300, 0, 40, 1, S("percentGap"),
-    function(v) return v .. " px" end, Changed, 1), 50, y - 120))
-  local bga = track(at(UI.Slider(panel, "% background opacity", 180, 0, 1, 0.05, S("percentBgAlpha"),
-    function(v) return math.floor(v * 100 + 0.5) .. "%" end, Changed), 50, y - 164))
-  local pr = pct.Refresh
-  pct.Refresh = function()
-    pr()
-    local a = ns.db.showPercent and 1 or 0.4
-    nx:SetAlpha(a); bga:SetAlpha(a); icon.Refresh()
-  end
-  track(at(UI.Check(panel, "FlareUI style for this window (needs FlareUI)", S("flareStyle"), W_, function() UI.Restyle() end), 26, y - 210))
-  track(at(UI.Check(panel, "EllesmereUI style for this window (needs EllesmereUI)", S("euiStyle"), W_, function() UI.Restyle() end), 26, y - 234))
+  local rep = track(at(UI.Check(panel, "Replace the game's aggro highlight (its flare above the bar)", S("replaceGameHighlight"), W_, Changed), 26, y - 94))
+  rep:HookScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Replace the game's aggro highlight", 1, 1, 1)
+    GameTooltip:AddLine("Holdfast reads the same threat states as the game's own display (Options > Nameplates > Aggro Display), and draws them its way. With this on, the game's \"Progressive\" flare is hidden on the nameplates Holdfast draws. Its Flash and Health Bar Color options stay the game's to turn on or off.", 0.85, 0.85, 0.85, true)
+    GameTooltip:Show()
+  end)
+  rep:HookScript("OnLeave", function() GameTooltip:Hide() end)
+  track(at(UI.Check(panel, "FlareUI style for this window (needs FlareUI)", S("flareStyle"), W_, function() UI.Restyle() end), 26, y - 122))
+  track(at(UI.Check(panel, "EllesmereUI style for this window (needs EllesmereUI)", S("euiStyle"), W_, function() UI.Restyle() end), 26, y - 146))
 
   -- Preview ----------------------------------------------------------------
-  y = y - 270
+  y = y - 182
   at(UI.Section(panel, "Preview on your target", W_), 26, y); y = y - 32
   local buttons = {}
   local MODES = { { "secure", "Holding / safe" }, { "insecure", "Close" }, { "lost", "Lost / on you" } }

@@ -1,10 +1,11 @@
--- Threat State: reads the client's native threat info for each unit and tracks transitions.
+-- Threat State: the game's own threat states for each enemy (what its nameplate aggro display
+-- uses), and their transitions.
 --
--- Native API (values may be hidden by the client in some content):
---   UnitDetailedThreatSituation("player", unit) -> isTanking, status, scaledPercent
---   UnitThreatSituation(groupUnit, unit)        -> status or nil (nil = not on its threat list)
--- status: 0 = not tanking, lower threat   1 = not tanking, higher threat (about to pull)
---         2 = tanking, someone is close    3 = tanking securely
+-- Native API (the game may hide the answers in some content):
+--   UnitThreatLeadSituation(unit, mob) -> 0-3: how far ahead of the next highest (3 = not first)
+--   UnitThreatSituation(unit, mob)     -> 0-3, or nil when not on its threat list:
+--     0 = not tanking, lower threat   1 = not tanking, higher threat (about to pull)
+--     2 = tanking, someone is close    3 = tanking securely
 local _, ns = ...
 local S = {}
 ns.State = S
@@ -79,80 +80,52 @@ local function Others(tank)
   return list
 end
 
--- Returns a state table (from the tank's point of view - you or your pet):
---   kind = "none"      not engaged with the tank, you or your group
---        | "secure"    the tank has aggro, safely
---        | "insecure"  the tank has aggro, someone is close
---        | "pulling"   the tank doesn't, but is about to
---        | "lost"      engaged, the tank doesn't have aggro
---        | "hidden"    the client hides the values; .isTanking may be a hidden boolean
---   pct  = the tank's threat % (number) when readable;  tank = "player" / "pet"
--- Highest threat anyone else has on `unit`, as % of what they'd need to pull it (100 = pulls).
--- Readable values only; hidden ones are returned separately for the client to evaluate.
-local function OthersThreat(unit, tank)
-  local best, hidden = nil, {}
-  for _, g in ipairs(Others(tank)) do
-    local _, _, p = UnitDetailedThreatSituation(g, unit)
-    if isSecret(p) then hidden[#hidden + 1] = p
-    elseif p and (not best or p > best) then best = p end
-  end
-  return best, hidden
+-- A state table, from your point of view (as the tank - you or your pet - or not):
+--   kind = "none"      not engaged with you, your pet or your group
+--        | "secure"    the tank holds it safely / you're well below the tank
+--        | "insecure"  someone's closing in on the tank / you're about to pull it
+--        | "lost"      the tank lost it / it's on you
+--        | "hidden"    the game hides the state: .step is the hidden step (see Step)
+--   dps = not the tank; tank = "player" / "pet"
+-- The threat state the game's own aggro display uses (a step, 0-3), from your point of view:
+--   As the tank (you, or your pet): UnitThreatLeadSituation - how far ahead of the next highest
+--     you are. 0 = safely ahead, 1-2 = someone's closing in, 3 = you're not first (lost).
+--   Not the tank: UnitThreatSituation("player") - 0 = well below the tank, 1 = about to pull it,
+--     2-3 = it's on you.
+-- These steps are hidden less often than the threat % (a separate restriction in the game); when
+-- they are hidden too, the renderer turns the hidden step into the right glow without reading it.
+local function Step(followed, unit, dps)
+  if dps then return UnitThreatSituation("player", unit) end
+  if UnitThreatLeadSituation then return UnitThreatLeadSituation(followed, unit) end
+  -- (no lead state in this client: from the detailed status: 3 safe, 2 someone close, else lost)
+  local _, status = UnitDetailedThreatSituation(followed, unit)
+  if isSecret(status) then return status end
+  if status == 3 then return 0 elseif status == 2 then return 2 elseif status ~= nil then return 3 end
 end
 
--- Your threat % on a unit, read from the threat line Blizzard puts in its tooltip ("85% Threat").
--- The game hides threat values from addons in combat, but this tooltip line stays readable.
--- Cached briefly per unit: building a tooltip on every refresh would be wasteful.
-local tipCache = {}
-local TIP_TTL = 0.3
-function S.TooltipPct(unit)
-  if not (C_TooltipInfo and C_TooltipInfo.GetUnit) then return nil end
-  local now = GetTime()
-  local c = tipCache[unit]
-  if c and now - c.t < TIP_TTL then return c.pct end
-  local pct
-  local ok, data = pcall(C_TooltipInfo.GetUnit, unit)
-  if ok and type(data) == "table" and not isSecret(data) then
-    for _, l in ipairs(data.lines or {}) do
-      local okT, t = pcall(function() return l.leftText end)
-      if okT and type(t) == "string" and not isSecret(t) then
-        local n = t:match("^%s*(%d+)%%")
-        if n then pct = tonumber(n) end
-      end
-    end
+-- Is anyone (the followed unit, you, your pet, your group) on `unit`'s threat list?
+-- true / false, or "?" when the game hides it.
+local function Engaged(followed, unit)
+  local list = Others(followed)
+  table.insert(list, 1, followed)
+  local hidden = false
+  for _, g in ipairs(list) do
+    local s = UnitThreatSituation(g, unit)
+    if isSecret(s) then hidden = true elseif s ~= nil then return true end
   end
-  tipCache[unit] = { t = now, pct = pct }
-  return pct
+  return hidden and "?" or false
 end
-function S.ForgetTooltip(unit) tipCache[unit] = nil end
 
--- Not the tank: your own threat, read the other way round.
---   secure   = safe: it's on someone else and you're well below them   (green by default)
---   insecure = close: you're at or above the warning % of pulling it  (orange)
---   lost     = on you: you pulled it                                   (red)
-local function EvaluateDps(unit)
-  local warn = ns.db.unstableAt or 80
-  local isTanking, status, pct = UnitDetailedThreatSituation("player", unit)
-  if isSecret(isTanking) or isSecret(status) then
-    local tp = S.TooltipPct(unit)
-    if tp then
-      if tp >= 100 then return { kind = "lost", pct = tp, dps = true, via = "tooltip" } end
-      if tp >= warn then return { kind = "insecure", pct = tp, dps = true, via = "tooltip" } end
-      return { kind = "secure", pct = tp, dps = true, via = "tooltip" }
-    end
-    return { kind = "hidden", isTanking = isTanking, dps = true }
+-- readable step -> state kind
+local function KindOf(step, dps)
+  if dps then
+    if step == nil or step == 0 then return "secure" end
+    if step == 1 then return "insecure" end
+    return "lost" -- 2 or 3: it's on you
   end
-  pct = Readable(pct) and pct or nil
-  if status == 3 or status == 2 then return { kind = "lost", pct = pct, dps = true } end
-  if status == 1 or (pct and pct >= warn) then return { kind = "insecure", pct = pct, dps = true } end
-  if status ~= nil then return { kind = "secure", pct = pct, dps = true } end
-  -- not on your threat list: fighting your group (it's on someone else)?
-  local others = GroupUnits()
-  if PetOut() then others[#others + 1] = "pet" end
-  for _, g in ipairs(others) do
-    local s2 = UnitThreatSituation(g, unit)
-    if isSecret(s2) or s2 ~= nil then return { kind = "secure", pct = 0, dps = true } end
-  end
-  return { kind = "none" }
+  if step == 0 then return "secure" end
+  if step == 1 or step == 2 then return "insecure" end
+  return "lost"
 end
 
 local function Evaluate(unit)
@@ -163,59 +136,24 @@ local function Evaluate(unit)
   if Readable(dead) and dead then return { kind = "none" } end
 
   local mode = S.Mode()
-  if mode == "dps" then return EvaluateDps(unit) end
-  local tank = (mode == "pet") and (PetOut() and "pet" or nil) or "player"
-  if not tank then return { kind = "none" } end -- "My pet" chosen, but no pet out
+  local dps = mode == "dps"
+  local followed = (mode == "pet") and (PetOut() and "pet" or nil) or "player"
+  if not followed then return { kind = "none" } end -- "My pet" chosen, but no pet out
 
-  local isTanking, status, pct = UnitDetailedThreatSituation(tank, unit)
-  if isSecret(isTanking) or isSecret(status) then
-    -- Hidden values. When the glows follow you, the tooltip's threat line still says how much
-    -- threat you have: 100% = it's on you; below that, how close you are to pulling it.
-    -- (It can't tell "someone's about to take it from you": it only knows your own threat.)
-    if tank == "player" then
-      local tp = S.TooltipPct(unit)
-      if tp then
-        if tp >= 100 then return { kind = "secure", pct = 100, tank = tank, via = "tooltip" } end
-        if tp >= (ns.db.unstableAt or 80) then return { kind = "pulling", pct = tp, tank = tank, via = "tooltip" } end
-        return { kind = "lost", pct = tp, tank = tank, via = "tooltip" }
-      end
-    end
-    -- Your pet tanks: the tooltip's threat line is YOUR threat, i.e. how close you are to pulling
-    -- it off your pet. 100% = it's on you (red); at the warning % = you're catching up (orange
-    -- while your pet still has it); below that, the hidden "pet is tanking" flag decides.
-    local _, others = OthersThreat(unit, tank)
-    if tank == "pet" then
-      local tp = S.TooltipPct(unit)
-      if tp and tp >= 100 then return { kind = "lost", pct = tp, tank = tank, via = "tooltip" } end
-      if tp and tp >= (ns.db.unstableAt or 80) then
-        return { kind = "hidden", isTanking = isTanking, others = others, tank = tank, warn = true, pct = tp, via = "tooltip" }
-      end
-    end
-    return { kind = "hidden", isTanking = isTanking, others = others, tank = tank }
-  end
-  pct = Readable(pct) and pct or nil
-
-  if status ~= nil then
-    if status == 3 or status == 2 then
-      -- The tank has aggro. It's unstable if the game says so, or anyone else is at or above
-      -- the "unstable" threshold of pulling it off the tank.
-      local closest = OthersThreat(unit, tank)
-      local unstable = status == 2 or (closest and closest >= (ns.db.unstableAt or 80))
-      return { kind = unstable and "insecure" or "secure", pct = pct, closest = closest, tank = tank }
-    end
-    if status == 1 then return { kind = "pulling", pct = pct, tank = tank } end
-    -- not on the tank yet, but close to the warning threshold of pulling it
-    if pct and pct >= (ns.db.unstableAt or 80) then return { kind = "pulling", pct = pct, tank = tank } end
-    return { kind = "lost", pct = pct, tank = tank }
+  local engaged = Engaged(followed, unit)
+  if engaged == false then return { kind = "none" } end
+  if engaged == "?" then -- hidden: fighting at all? (out of combat it's nothing yet)
+    local c = UnitAffectingCombat(unit)
+    if Readable(c) and not c then return { kind = "none" } end
   end
 
-  -- Not on the tank's threat list: is it fighting anyone else (you, your pet, your group)?
-  for _, g in ipairs(Others(tank)) do
-    local s = UnitThreatSituation(g, unit)
-    if isSecret(s) then return { kind = "hidden", isTanking = false, tank = tank } end
-    if s ~= nil then return { kind = "lost", pct = 0, tank = tank } end
+  local step = Step(followed, unit, dps)
+  if isSecret(step) then
+    -- the hidden "is it on you" flag too, for clients that can't turn a hidden step into a glow
+    local isTanking = UnitDetailedThreatSituation(followed, unit)
+    return { kind = "hidden", step = step, isTanking = isTanking, dps = dps, tank = followed }
   end
-  return { kind = "none" }
+  return { kind = KindOf(step, dps), step = step, dps = dps, tank = followed }
 end
 
 local HAS_AGGRO = { secure = true, insecure = true }
