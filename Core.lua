@@ -16,6 +16,7 @@ ns.DEFAULTS = {
   },
   unstableAt        = 80,    -- unstable once someone has this % of the threat needed to pull it off you
   showIcon          = true,  -- "!": it's on you (not the tank), or you lost it (tank); replaces the % at 100%
+  showAggroText     = true,  -- not the tank and it's on you: "AGGRO" in the box beside the nameplate
   replaceGameHighlight = true, -- hide the game's own aggro flare (Aggro Display: Progressive) where Holdfast draws
   showPercent       = false, -- threat % beside the nameplate
   percentGap        = 6,       -- the % box: distance left of the health bar (px)

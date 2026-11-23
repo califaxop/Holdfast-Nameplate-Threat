@@ -618,9 +618,10 @@ local function Style(f, dps, plate)
   local db = ns.db
   local st, col = Sets(dps)
   StyleFlash(f.aggro, col.aggro, st.aggro.alpha, st.aggro.speed or 0.5, false)
-  -- the "!" marks "it's on you" (or lost, as the tank)
-  StyleFlash(f.unstable, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, false)
-  StyleFlash(f.nothreat, col.nothreat, st.nothreat.alpha, st.nothreat.speed or 0.25, db.showIcon)
+  -- the "!": not the tank, you're about to pull it; the tank (or your pet), you lost it. (Not the
+  -- tank and it's on you: "AGGRO" in the box instead, see Render.)
+  StyleFlash(f.unstable, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, db.showIcon and dps)
+  StyleFlash(f.nothreat, col.nothreat, st.nothreat.alpha, st.nothreat.speed or 0.25, db.showIcon and not dps)
   for _, g in ipairs(f.gates) do StyleFlash(g.flash, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, db.showIcon) end
 end
 
@@ -683,7 +684,13 @@ function Render(plate, state, unit)
   f.aggro.holder:SetAlpha(1); f.unstable.holder:SetAlpha(1); f.nothreat.holder:SetAlpha(1)
 
   if kind == "none" then HideAll(f); return end
-  HideGates(f); f.pct:Hide() -- (no threat % any more: the game's states only)
+  HideGates(f); f.pct:Hide(); f.pctBox:SetAlpha(1)
+  -- Not the tank and it's on you: "AGGRO" in the box beside the nameplate (where the threat % was)
+  local aggroText = dps and db.showAggroText
+  local function AggroText()
+    local c = col.nothreat
+    f.pct:SetText("AGGRO"); f.pct:SetTextColor(c[1], c[2], c[3]); f.pct:SetAlpha(1); f.pct:Show()
+  end
   if kind == "insecure" and not st.unstable.show then kind = "secure" end
 
   if kind == "hidden" then
@@ -697,6 +704,11 @@ function Render(plate, state, unit)
       local ok = Gate(f.aggro.holder, curves.aggro, state.step)
         and Gate(f.unstable.holder, st.unstable.show and curves.unstable or curves.never, state.step)
         and Gate(f.nothreat.holder, curves.nothreat, state.step)
+      if ok and aggroText then
+        AggroText()
+        ok = Gate(f.pctBox, curves.nothreat, state.step) -- (shown by the game when it's on you)
+        if not ok then f.pct:Hide() end
+      end
       if ok then return end
     end
     -- (this client can't: from the hidden "is it on you" flag, on you or not)
@@ -708,6 +720,7 @@ function Render(plate, state, unit)
       -- as the tank, it being on you is good; not the tank, it's the bad one
       f.aggro.holder:SetAlphaFromBoolean(t, dps and 0 or 1, dps and 1 or 0)
       f.nothreat.holder:SetAlphaFromBoolean(t, dps and 1 or 0, dps and 0 or 1)
+      if aggroText then AggroText(); f.pctBox:SetAlphaFromBoolean(t, 1, 0) end
     else
       ShowFlash(f.aggro, false); ShowFlash(f.nothreat, false)
     end
@@ -718,6 +731,7 @@ function Render(plate, state, unit)
   ShowFlash(f.aggro, kind == "secure" and st.aggro.show, st.aggro.flash)
   ShowFlash(f.unstable, kind == "insecure", st.unstable.flash)
   ShowFlash(f.nothreat, kind == "lost" and st.nothreat.show, st.nothreat.flash)
+  if aggroText and kind == "lost" then AggroText() end
 end
 
 function V.Hide(plate)

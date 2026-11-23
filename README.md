@@ -6,7 +6,7 @@ A glow around each enemy's nameplate shows where you stand at a glance. Holdfast
 
 ## Highlights
 - **Tank:** holding it; someone closing in on you (the game's own "lead" state); lost it, with a "!".
-- **Not the tank:** safe; about to pull it; on you, with a "!".
+- **Not the tank:** safe; about to pull it, with a "!"; on you, with "AGGRO" in a box beside the nameplate.
 - **Works in dungeons and groups:** the game's threat states are hidden less often than threat %, and even when they are hidden, Holdfast has the game turn them into the right glow without reading them.
 - **Replaces the game's aggro highlight:** on the nameplates it draws, the game's "Progressive" flare is hidden (switch it in the settings). The game's Flash and Health Bar Color options stay yours to use.
 - **Every glow is yours to tune:** color, on/off, flash, strength and flash interval, in the style you like: nameplate border, outline, pixel lines or autocast sparkles.
@@ -36,7 +36,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/holdfast-nameplate-threat/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
-- **5.0.0:** Holdfast now restyles the game's own threat display: it reads the same threat states as the game's aggro highlight (for tanks, how far ahead of the next highest you are; for everyone else, how close you are to pulling it) and draws them with your glows and the "!". The in-between state is back in dungeons and groups (orange: someone's closing in / you're about to pull), even when the game hides threat. The game's "Progressive" flare is hidden where Holdfast draws (switch in the settings). The threat %, its settings and the "Warn at" slider are gone: in groups the game hides them too often to be reliable.
+- **5.0.0:** Holdfast now restyles the game's own threat display: it reads the same threat states as the game's aggro highlight (for tanks, how far ahead of the next highest you are; for everyone else, how close you are to pulling it) and draws them with your glows. Not the tank: a "!" when you're about to pull it, and "AGGRO" in a box beside the nameplate when it's on you; the tank: a "!" when you've lost it. The in-between state is back in dungeons and groups, even when the game hides threat. The game's "Progressive" flare is hidden where Holdfast draws (switch in the settings). The threat %, its settings and the "Warn at" slider are gone: in groups the game hides them too often to be reliable.
 - **4.1.1:** Fixed: on the game's nameplates, the "!" and % no longer sit on the elite / rare icon, the raid marker or the enemy's buffs (left of the bar): they go past whichever of those is showing, and follow as buffs come and go.
 - **4.1.0:** Works on FlareUI's and EllesmereUI's nameplates (they hide the game's, so the glow and % were invisible there): the glow and % now sit on their plates, in their font, with a % box like their level box. New glow styles for everyone (Glows, Glow style): nameplate border, outline, pixel lines or autocast sparkles. The settings window follows EllesmereUI's style too.
 - **4.0.4:** No more shaking: the glow, threat % and "!" move smoothly with the nameplate's health bar. The threat % box now wears the same art as the nameplate's level box (and its yellow outline while the mob is your target), and the "!" is sharper and brighter.
