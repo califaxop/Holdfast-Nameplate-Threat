@@ -1,6 +1,6 @@
 # Holdfast: Nameplate Threat
 
-**See how much threat you're generating, right on the enemy's nameplate.**
+**See at a glance who has aggro, right on the enemy's nameplate.**
 
 A glow around each enemy's nameplate shows at a glance whether it's attacking you, in your colors and style. Tanks see whether they're holding it; damage dealers and healers see whether they've pulled it. Built for tanks, damage dealers, healers and pet classes alike.
 
@@ -23,10 +23,13 @@ A glow around each enemy's nameplate shows at a glance whether it's attacking yo
 | Command | Does |
 |---|---|
 | `/hf` | Open settings |
+| `/hf icon` | Turn the "!" on or off |
 | `/hf debug` | Show what the game says right now (is each enemy on you) |
 
 ## Good to know
 - Holdfast shows two states only (on you or not): in groups the game hides threat % and how close anyone is too often for more to be reliable.
+- The game has its own aggro display (Options > Nameplates > Aggro Display). Holdfast hides its "Progressive" flare where Holdfast draws, so you don't see both; its Flash and Health Bar Color options can be used alongside Holdfast.
+- Shown only on enemies fighting you, your pet or your group. "Only in a party or raid" in the settings keeps it off when you're solo (unless your pet tanks).
 
 ## Updates
 New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 AM US Eastern). Urgent fixes ship sooner.
