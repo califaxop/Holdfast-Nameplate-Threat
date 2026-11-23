@@ -21,8 +21,11 @@ ns.DEFAULTS = {
   percentBgAlpha    = 0.8,     -- the % box's background opacity
   iconOffsetX       = 4,       -- the "!": distance left of the % box (or of the bar, without the %)
   onlyInGroup       = false, -- only glow while you're in a party or raid (or your pet is the tank)
+  glowStyle         = "auto",  -- "auto" (the plate's border art; an outline on FlareUI / EllesmereUI plates),
+                               -- "border", "outline", "pixel" (pixel lines), "autocast" (sparkles)
   tank              = "auto",  -- whose aggro the glows follow: "auto" (your pet when it's out), "me", "pet"
   flareStyle        = true,  -- settings window in FlareUI's style when FlareUI is installed
+  euiStyle = true,       -- EllesmereUI look when EllesmereUI is installed (its skinning API)
   colors = {
     aggro    = { 0.35, 1.00, 0.45 },  -- stable
     unstable = { 1.00, 0.50, 0.05 },  -- unstable

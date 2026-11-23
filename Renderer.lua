@@ -25,6 +25,38 @@ local function HealthBarOf(plate)
   return uf.healthBar or (uf.HealthBarsContainer and uf.HealthBarsContainer.healthBar) or uf
 end
 
+-- Where to draw. FlareUI's and EllesmereUI's nameplate modules draw their own plates on top of the
+-- game's and make its unit frame invisible, so with them on, Holdfast draws on theirs:
+--   EllesmereUI: its plate for the unit (EllesmereNameplates_NS.plates[unit]), health bar .health
+--   FlareUI:     its parts of the game plate (FlareUI.Nameplates.PartsFor(plate)), bar box .box
+-- Returns the parent frame, the bar to frame, which kind ("blizzard" | "eui" | "flare") and its plate.
+local function Host(plate, unit)
+  local EN = _G.EllesmereNameplates_NS
+  local ep = type(EN) == "table" and type(EN.plates) == "table" and unit and EN.plates[unit]
+  if type(ep) == "table" and ep.health and ep.IsShown and ep:IsShown() then return ep, ep.health, "eui", ep end
+  local NP = type(FlareUI) == "table" and FlareUI.Nameplates
+  if type(NP) == "table" and NP.PartsFor then
+    local ok, fp = pcall(NP.PartsFor, plate)
+    if ok and type(fp) == "table" and (fp.box or fp.health) then
+      return fp.root or fp.holder or fp.box, fp.box or fp.health, "flare", fp
+    end
+  end
+  return plate.UnitFrame or plate, HealthBarOf(plate), "blizzard"
+end
+
+-- the font the plate shows its level in: theirs on FlareUI / EllesmereUI plates, else the game's
+local function PlateFont(fs, kind, src)
+  local from = (kind == "eui" and src and (src.levelText or src.hpText)) or (kind == "flare" and src and (src.level or src.name))
+  if from and from.GetFont then
+    local ok, path, size, flags = pcall(from.GetFont, from)
+    if ok and type(path) == "string" and not isSecret(path) and type(size) == "number" and not isSecret(size) then
+      fs:SetFont(path, math.max(8, size), flags or "")
+      return
+    end
+  end
+  if _G.SystemFont_NamePlateLevel then fs:SetFontObject(_G.SystemFont_NamePlateLevel) else fs:SetFontObject("GameFontHighlightSmall") end
+end
+
 -- Forever's nameplate target border art. Used as our glow so it matches the game's look.
 local BORDER_ATLAS = "UI-HUD-CoolDownManager-Selected-yellow"
 
@@ -71,8 +103,98 @@ local function OutlineGlow(parent, bar)
   return g
 end
 
--- One glow = the nameplate's border art, tinted, plus a soft additive copy.
-local function MakeGlow(holder, bar)
+-- The bar's size, to run a moving glow around it (nil if the client won't say)
+local function BarSize(bar)
+  local ok, w, h = pcall(bar.GetSize, bar)
+  if ok and type(w) == "number" and type(h) == "number" and not isSecret(w) and not isSecret(h) and w > 0 and h > 0 then return w, h end
+end
+-- a point `d` along the edge of a w x h box grown by m on every side: x, y from its top-left,
+-- and whether that stretch runs across (true) or down (false)
+local function Around(d, w, h, m)
+  local W, H = w + 2 * m, h + 2 * m
+  d = d % (2 * (W + H))
+  if d < W then return d - m, -m, true end
+  d = d - W
+  if d < H then return w + m, d - m, false end
+  d = d - H
+  if d < W then return w + m - d, h + m, true end
+  return -m, h + m - (d - W), false
+end
+
+-- Pixel lines: short bars running round the plate (as in EllesmereUI's and other UIs' "pixel glow").
+local function PixelGlow(holder, bar)
+  local g = { textures = {} }
+  local N, TH, PERIOD = 8, 2, 4
+  local drv = CreateFrame("Frame", nil, holder)
+  for i = 1, N do
+    local t = holder:CreateTexture(nil, "OVERLAY", nil, 6)
+    t:SetTexture("Interface\\Buttons\\WHITE8X8")
+    g.textures[i] = t
+  end
+  local clock = 0
+  drv:SetScript("OnUpdate", function(_, el)
+    clock = (clock + el) % PERIOD
+    local w, h = BarSize(bar)
+    if not w then for _, t in ipairs(g.textures) do t:Hide() end return end
+    local per = 2 * (w + h + 4 * 2)
+    local len = math.max(4, math.min(w, h, per / N * 0.45))
+    for i, t in ipairs(g.textures) do
+      local x, y, across = Around(clock / PERIOD * per + (i - 1) * per / N, w, h, 2)
+      t:ClearAllPoints()
+      t:SetPoint("CENTER", bar, "TOPLEFT", x, -y)
+      if across then t:SetSize(len, TH) else t:SetSize(TH, math.min(len, h + 4)) end
+      t:Show()
+    end
+  end)
+  return g
+end
+
+-- Autocast: four sparkle trails circling the plate (as the game's autocast shine)
+local function AutocastGlow(holder, bar)
+  local g = { textures = {} }
+  local GROUPS, SIZES, PERIOD = 4, { 7, 6, 5, 4 }, 6
+  local drv = CreateFrame("Frame", nil, holder)
+  for i = 1, GROUPS * #SIZES do
+    local t = holder:CreateTexture(nil, "OVERLAY", nil, 7)
+    t:SetTexture("Interface\\Cooldown\\star4")
+    t:SetBlendMode("ADD")
+    g.textures[i] = t
+  end
+  local clock = 0
+  drv:SetScript("OnUpdate", function(_, el)
+    clock = (clock + el) % PERIOD
+    local w, h = BarSize(bar)
+    if not w then for _, t in ipairs(g.textures) do t:Hide() end return end
+    local per = 2 * (w + h + 4 * 1)
+    local k = 0
+    for grp = 1, GROUPS do
+      for j, size in ipairs(SIZES) do
+        k = k + 1
+        local t = g.textures[k]
+        local x, y = Around(clock / PERIOD * per + (grp - 1) * per / GROUPS - (j - 1) * 3, w, h, 1)
+        t:ClearAllPoints(); t:SetPoint("CENTER", bar, "TOPLEFT", x, -y); t:SetSize(size, size); t:Show()
+      end
+    end
+  end)
+  return g
+end
+
+-- One glow, in the chosen style:
+--   border   : the nameplate's own border art, tinted, plus a soft additive copy (the game's look)
+--   outline  : a clean 2 px line round the bar
+--   pixel    : pixel lines running round it
+--   autocast : sparkles circling it
+-- "auto": the border on the game's plates, the outline on FlareUI's and EllesmereUI's flat ones.
+local function GlowStyle(kind)
+  local st = ns.db and ns.db.glowStyle or "auto"
+  if st == "auto" then return kind == "blizzard" and "border" or "outline" end
+  return st
+end
+local function MakeGlow(holder, bar, kind)
+  local st = GlowStyle(kind)
+  if st == "pixel" then return PixelGlow(holder, bar) end
+  if st == "autocast" then return AutocastGlow(holder, bar) end
+  if st == "outline" then return OutlineGlow(holder, bar) end
   local base = BorderTexture(holder, bar, "OVERLAY", 6)
   local soft = base and BorderTexture(holder, bar, "OVERLAY", 7)
   if not (base and soft) then return OutlineGlow(holder, bar) end
@@ -82,7 +204,7 @@ end
 
 local function TintGlow(g, c, alpha)
   for _, t in ipairs(g.textures) do
-    t:SetDesaturated(true) -- the source art is yellow; strip it so our color shows true
+    if t.SetDesaturated then t:SetDesaturated(true) end -- the source art is yellow; strip it so our color shows true
     t:SetVertexColor(c[1], c[2], c[3], alpha)
   end
   if g.soft then g.soft:SetAlpha(alpha * 0.6) end
@@ -116,7 +238,7 @@ local LEVEL_ATLAS = "ui-hud-nameplates-levelindicator"
 local LEVEL_SELECTED_ATLAS = "ui-hud-nameplates-levelindicator-rectangle-selected"
 local BOX_BORDER = { 0.86, 0.66, 0.36 } -- the fallback border's bronze (on grey art, so a bit brighter)
 local boxes = setmetatable({}, { __mode = "k" }) -- [box frame] = { art, selected, hasLevelArt, key }
-local function StyleBox(b)
+local function StyleBox(b, kind, src)
   local a = ns.db.percentBgAlpha or 0.8
   local x = boxes[b]
   if not x then
@@ -130,9 +252,45 @@ local function StyleBox(b)
     if x.selected then x.selected:Hide() end
     boxes[b] = x
   end
-  local key = tostring(x.hasLevelArt) .. a
+  local key = tostring(x.hasLevelArt) .. a .. (kind or "")
   if x.key == key then return end
   x.key = key
+  if x.border then x.border:Hide() end
+  if kind == "eui" then
+    -- EllesmereUI: a flat dark box with a 1 px black edge, like its plates
+    x.art:Hide(); if x.selected then x.selected:Hide() end
+    b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
+      insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+    b:SetBackdropColor(0, 0, 0, a)
+    b:SetBackdropBorderColor(0, 0, 0, 1)
+    return
+  end
+  if kind == "flare" then
+    -- FlareUI: the same backdrop and border as its plate's level box
+    x.art:Hide(); if x.selected then x.selected:Hide() end
+    local lf, lb = src and src.levelFrame, src and src.levelBorder
+    local okB, bd = false
+    if lf and lf.GetBackdrop then okB, bd = pcall(lf.GetBackdrop, lf) end
+    if okB and type(bd) == "table" then
+      b:SetBackdrop(bd)
+      local ok2, r, g, bb = pcall(lf.GetBackdropColor, lf)
+      b:SetBackdropColor(ok2 and r or 0, ok2 and g or 0, ok2 and bb or 0, a)
+    else
+      b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" }); b:SetBackdropColor(0, 0, 0, a)
+    end
+    local okE, be = false
+    if lb and lb.GetBackdrop then okE, be = pcall(lb.GetBackdrop, lb) end
+    if okE and type(be) == "table" then
+      x.border = x.border or CreateFrame("Frame", nil, b, "BackdropTemplate")
+      x.border:ClearAllPoints()
+      x.border:SetAllPoints(b)
+      x.border:SetBackdrop(be)
+      local ok3, r, g, bb, ba = pcall(lb.GetBackdropBorderColor, lb)
+      if ok3 and r then x.border:SetBackdropBorderColor(r, g, bb, ba or 1) end
+      x.border:Show()
+    end
+    return
+  end
   if x.hasLevelArt then
     x.art:Show(); x.art:SetAlpha(a)
     b:SetBackdrop(nil)
@@ -155,12 +313,12 @@ local function SetQuestArt(t)
   if not (pcall(t.SetAtlas, t, QUEST_ATLAS, false) and t:GetAtlas()) then t:SetTexture(QUEST_ICON) end
 end
 
-local function MakeFlash(f, bar)
+local function MakeFlash(f, bar, kind)
   local holder = CreateFrame("Frame", nil, f)
   holder:SetAllPoints()
   local inner = CreateFrame("Frame", nil, holder)
   inner:SetAllPoints()
-  local glow = MakeGlow(inner, bar)
+  local glow = MakeGlow(inner, bar, kind)
   local anim = inner:CreateAnimationGroup()
   anim:SetLooping("BOUNCE")
   local a = anim:CreateAnimation("Alpha")
@@ -221,18 +379,18 @@ end
 
 local MAX_GATES = 5 -- party members + pet
 
-local function Create(plate)
-  local bar = HealthBarOf(plate)
+local function Create(plate, parent, bar, kind, src)
   -- on the plate's own unit frame (the bar's parent chain), so it moves and scales with the bar
-  -- exactly; never anchored to the plate's base frame
-  local f = CreateFrame("Frame", nil, plate.UnitFrame or plate)
-  f:SetFrameLevel(bar:GetFrameLevel() + 2) -- just above Blizzard's bar/border
+  -- exactly; never anchored to the plate's base frame (FlareUI's / EllesmereUI's plate when they draw it)
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetFrameLevel(bar:GetFrameLevel() + 2) -- just above the bar/border
+  f.kind, f.src = kind, src
 
   f:SetAllPoints(bar)
 
-  f.aggro    = MakeFlash(f, bar)  -- stable
-  f.unstable = MakeFlash(f, bar)  -- unstable
-  f.nothreat = MakeFlash(f, bar)  -- no threat
+  f.aggro    = MakeFlash(f, bar, kind)  -- stable
+  f.unstable = MakeFlash(f, bar, kind)  -- unstable
+  f.nothreat = MakeFlash(f, bar, kind)  -- no threat
 
   -- hidden-value mode: one unstable glow per group member, each switched on by the client
   -- when *that* member's hidden threat % reaches the threshold; all inside a holder that the
@@ -243,7 +401,7 @@ local function Create(plate)
   for i = 1, MAX_GATES do
     local gate = CreateFrame("Frame", nil, f.hidTank)
     gate:SetAllPoints()
-    local fl = MakeFlash(gate, bar)
+    local fl = MakeFlash(gate, bar, kind)
     f.gates[i] = { frame = gate, flash = fl }
   end
   f.hidTank:Hide()
@@ -253,7 +411,7 @@ local function Create(plate)
   f.pctBox = CreateFrame("Frame", nil, f.top, "BackdropTemplate") -- under the level box
   f.pctBox:SetSize(30, 15)
   f.pct = f.pctBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  if _G.SystemFont_NamePlateLevel then f.pct:SetFontObject(_G.SystemFont_NamePlateLevel) end -- the level's font
+  PlateFont(f.pct, kind, src) -- the level's font (FlareUI's / EllesmereUI's on their plates)
   f.pct:SetPoint("CENTER", 0, 0)
   f.bar = bar
 
@@ -334,7 +492,7 @@ end
 
 local function Style(f, dps, plate)
   PlaceText(f, plate and QuestieIcon(plate))
-  StyleBox(f.pctBox)
+  StyleBox(f.pctBox, f.kind, f.src)
   local db = ns.db
   local st, col = Sets(dps)
   StyleFlash(f.aggro, col.aggro, st.aggro.alpha, st.aggro.speed or 0.5, false)
@@ -364,7 +522,7 @@ end
 
 local Render
 function V.Render(plate, state, unit)
-  Render(plate, state)
+  Render(plate, state, unit)
   local f = plate and indicators[plate]
   if not f then return end
   -- the % box follows the %: shown with it, sized to it
@@ -377,17 +535,22 @@ function V.Render(plate, state, unit)
     f.pctBox:SetWidth(math.max(28, ((ok and type(w) == "number" and not isSecret(w)) and w or 20) + 10))
     -- the yellow outline while it's your target, like the level box
     local x = boxes[f.pctBox]
-    if x and x.selected then
+    if x and x.selected and f.kind == "blizzard" then
       local okT, isT = pcall(UnitIsUnit, unit or "none", "target")
       x.selected:SetShown(okT and not isSecret(isT) and isT and true or false)
     end
   end
 end
 
-function Render(plate, state)
+function Render(plate, state, unit)
   if not plate then return end
+  local parent, bar, kind, src = Host(plate, unit)
   local f = indicators[plate]
-  if not f then f = Create(plate); indicators[plate] = f end
+  if f and (f.bar ~= bar or f.kind ~= kind) then -- the plate is drawn by another UI now (or no longer)
+    HideAll(f); f:Hide(); f = nil
+  end
+  if not f then f = Create(plate, parent, bar, kind, src); indicators[plate] = f end
+  f:Show()
   local dps = state and state.dps or false
   Style(f, dps, plate)
   local db = ns.db
@@ -497,6 +660,11 @@ end
 function V.Hide(plate)
   local f = plate and indicators[plate]
   if f then HideAll(f) end
+end
+
+-- the glow style changed: rebuild every indicator on its next update
+function V.Rebuild()
+  for plate, f in pairs(indicators) do HideAll(f); f:Hide(); indicators[plate] = nil end
 end
 
 V.HasSecretSupport = function() return UIParent.SetAlphaFromBoolean ~= nil end

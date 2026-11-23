@@ -174,8 +174,16 @@ local function BuildPanel(panel)
     { function() return ns.db.unstableAt end, function(v) ns.db.unstableAt = math.floor(v + 0.5) end },
     function(v) return math.floor(v + 0.5) .. "% of pulling" end, Changed), 26, y - 6))
 
+  -- glow style (every state)
+  at(UI.Text(panel, "line", "Glow style"), 26, y - 50)
+  track(at(UI.Selector(panel, 300, {
+      { "auto", "Auto (matches your nameplates)" }, { "border", "Nameplate border" }, { "outline", "Outline" },
+      { "pixel", "Pixel lines" }, { "autocast", "Autocast sparkles" } },
+    S("glowStyle"), function() ns.Renderer.Rebuild(); Changed() end,
+    "How the glow looks, for every state. Auto: the game's nameplate border, or a clean outline on FlareUI's and EllesmereUI's flat nameplates. Pixel lines and Autocast sparkles move round the plate."), 120, y - 46))
+
   -- Display ----------------------------------------------------------------
-  y = y - 56
+  y = y - 90
   at(UI.Section(panel, "Display", W_), 26, y); y = y - 32
   track(at(UI.Check(panel, "Only in a party or raid (or when my pet tanks)", S("onlyInGroup"), W_, Changed), 26, y))
   local iconDist
@@ -204,9 +212,10 @@ local function BuildPanel(panel)
     nx:SetAlpha(a); bga:SetAlpha(a); icon.Refresh()
   end
   track(at(UI.Check(panel, "FlareUI style for this window (needs FlareUI)", S("flareStyle"), W_, function() UI.Restyle() end), 26, y - 210))
+  track(at(UI.Check(panel, "EllesmereUI style for this window (needs EllesmereUI)", S("euiStyle"), W_, function() UI.Restyle() end), 26, y - 234))
 
   -- Preview ----------------------------------------------------------------
-  y = y - 246
+  y = y - 270
   at(UI.Section(panel, "Preview on your target", W_), 26, y); y = y - 32
   local buttons = {}
   local MODES = { { "secure", "Holding / safe" }, { "insecure", "Close" }, { "lost", "Lost / on you" } }
