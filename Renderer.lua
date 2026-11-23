@@ -343,76 +343,6 @@ local function MakeFlash(f, bar, kind)
   return { holder = holder, glow = glow, anim = anim, alpha = a, icon = icon }
 end
 
----------------------------------------------------------------------------
--- Hidden threat %: the client can turn a hidden number into a hidden on/off through a
--- "curve" without the addon reading it. Step curve: below the threshold -> 0, at/above -> 1.
--- If this client doesn't support it, ns.curveState becomes "unsupported" and we fall back.
----------------------------------------------------------------------------
-local curve, curveAt
-ns.curveState = "untested"
-local function ThresholdCurve()
-  local at = ns.db.unstableAt or 80
-  if curve and curveAt == at then return curve end
-  if not (C_CurveUtil and C_CurveUtil.CreateCurve) then ns.curveState = "unsupported"; return nil end
-  local ok, c = pcall(C_CurveUtil.CreateCurve)
-  if not ok or not c then ns.curveState = "unsupported"; return nil end
-  if Enum and Enum.LuaCurveType and c.SetType then pcall(c.SetType, c, Enum.LuaCurveType.Step) end
-  local ok1 = pcall(c.AddPoint, c, 0, 0)
-  local ok2 = pcall(c.AddPoint, c, at, 1)
-  if not (ok1 and ok2) then ns.curveState = "unsupported"; return nil end
-  curve, curveAt = c, at
-  return curve
-end
-
--- The game's threat step (0-3) -> which glow shows, as step curves the game evaluates for us when
--- the step is hidden (we never read it). Tank (lead): 0 holding, 1-2 someone close, 3 lost.
--- Not the tank: 0 safe, 1 about to pull, 2-3 on you.
-local stepCurves = {}
-local function Curve(points)
-  if not (C_CurveUtil and C_CurveUtil.CreateCurve) then return nil end
-  local ok, c = pcall(C_CurveUtil.CreateCurve)
-  if not ok or not c then return nil end
-  if Enum and Enum.LuaCurveType and c.SetType then pcall(c.SetType, c, Enum.LuaCurveType.Step) end
-  for _, p in ipairs(points) do
-    if not pcall(c.AddPoint, c, p[1], p[2]) then return nil end
-  end
-  return c
-end
-local function StepCurves(dps)
-  local key = dps and "dps" or "tank"
-  if stepCurves[key] == nil then
-    local t = {
-      aggro = Curve({ { 0, 1 }, { 1, 0 } }),
-      unstable = Curve(dps and { { 0, 0 }, { 1, 1 }, { 2, 0 } } or { { 0, 0 }, { 1, 1 }, { 3, 0 } }),
-      nothreat = Curve(dps and { { 0, 0 }, { 2, 1 } } or { { 0, 0 }, { 3, 1 } }),
-      never = Curve({ { 0, 0 } }),
-    }
-    stepCurves[key] = (t.aggro and t.unstable and t.nothreat and t.never) and t or false
-    if not stepCurves[key] then ns.curveState = "unsupported" end
-  end
-  return stepCurves[key] or nil
-end
--- `frame`'s alpha from `curve` at the hidden `step`; false if the client won't
-local function Gate(frame, curve, step)
-  local ok, v = pcall(curve.Evaluate, curve, step)
-  if ok and v ~= nil and pcall(frame.SetAlpha, frame, v) then ns.curveState = "works"; return true end
-  ns.curveState = "unsupported"
-  return false
-end
-
--- Set `frame`'s alpha to 1 when the hidden percentage is at/above the threshold, else 0.
-local function GateFromHiddenPct(frame, pct)
-  local c = ThresholdCurve()
-  if not c then return false end
-  local ok, v = pcall(c.Evaluate, c, pct)
-  if ok and v ~= nil and pcall(frame.SetAlpha, frame, v) then
-    ns.curveState = "works"
-    return true
-  end
-  ns.curveState = "unsupported"
-  return false
-end
-
 local MAX_GATES = 5 -- party members + pet
 
 local function Create(plate, parent, bar, kind, src)
@@ -618,10 +548,9 @@ local function Style(f, dps, plate)
   local db = ns.db
   local st, col = Sets(dps)
   StyleFlash(f.aggro, col.aggro, st.aggro.alpha, st.aggro.speed or 0.5, false)
-  -- the "!": not the tank, you're about to pull it; the tank (or your pet), you lost it. (Not the
-  -- tank and it's on you: "AGGRO" in the box instead, see Render.)
-  StyleFlash(f.unstable, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, db.showIcon and dps)
-  StyleFlash(f.nothreat, col.nothreat, st.nothreat.alpha, st.nothreat.speed or 0.25, db.showIcon and not dps)
+  -- the "!" goes with the red glow: not the tank, it's on you; the tank (or your pet), you lost it
+  StyleFlash(f.unstable, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, false)
+  StyleFlash(f.nothreat, col.nothreat, st.nothreat.alpha, st.nothreat.speed or 0.25, db.showIcon)
   for _, g in ipairs(f.gates) do StyleFlash(g.flash, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, db.showIcon) end
 end
 
@@ -684,54 +613,27 @@ function Render(plate, state, unit)
   f.aggro.holder:SetAlpha(1); f.unstable.holder:SetAlpha(1); f.nothreat.holder:SetAlpha(1)
 
   if kind == "none" then HideAll(f); return end
-  HideGates(f); f.pct:Hide(); f.pctBox:SetAlpha(1)
-  -- Not the tank and it's on you: "AGGRO" in the box beside the nameplate (where the threat % was)
-  local aggroText = dps and db.showAggroText
-  local function AggroText()
-    local c = col.nothreat
-    f.pct:SetText("AGGRO"); f.pct:SetTextColor(c[1], c[2], c[3]); f.pct:SetAlpha(1); f.pct:Show()
-  end
-  if kind == "insecure" and not st.unstable.show then kind = "secure" end
+  HideGates(f); f.pct:Hide()
+  ShowFlash(f.unstable, false)
 
   if kind == "hidden" then
-    -- The game hides the threat state: it turns the hidden step into each glow's visibility
-    -- itself (step curves), so the right one shows without us reading it.
-    local curves = StepCurves(dps)
-    if curves and state.step ~= nil then
-      ShowFlash(f.aggro, st.aggro.show, st.aggro.flash)
-      ShowFlash(f.unstable, st.unstable.show, st.unstable.flash)
-      ShowFlash(f.nothreat, st.nothreat.show, st.nothreat.flash)
-      local ok = Gate(f.aggro.holder, curves.aggro, state.step)
-        and Gate(f.unstable.holder, st.unstable.show and curves.unstable or curves.never, state.step)
-        and Gate(f.nothreat.holder, curves.nothreat, state.step)
-      if ok and aggroText then
-        AggroText()
-        ok = Gate(f.pctBox, curves.nothreat, state.step) -- (shown by the game when it's on you)
-        if not ok then f.pct:Hide() end
-      end
-      if ok then return end
-    end
-    -- (this client can't: from the hidden "is it on you" flag, on you or not)
-    ShowFlash(f.unstable, false)
+    -- The game hides it: the hidden "is it on you" answer turns the glows (and the "!") on and off
+    -- itself, without us reading it. As the tank on you is good; not the tank, it's the bad one.
     local t = state.isTanking
     if f.SetAlphaFromBoolean and (isSecret(t) or t ~= nil) then
       ShowFlash(f.aggro, st.aggro.show, st.aggro.flash)
       ShowFlash(f.nothreat, st.nothreat.show, st.nothreat.flash)
-      -- as the tank, it being on you is good; not the tank, it's the bad one
       f.aggro.holder:SetAlphaFromBoolean(t, dps and 0 or 1, dps and 1 or 0)
       f.nothreat.holder:SetAlphaFromBoolean(t, dps and 1 or 0, dps and 0 or 1)
-      if aggroText then AggroText(); f.pctBox:SetAlphaFromBoolean(t, 1, 0) end
     else
       ShowFlash(f.aggro, false); ShowFlash(f.nothreat, false)
     end
     return
   end
 
-  -- readable: three states
+  -- readable: on you or not
   ShowFlash(f.aggro, kind == "secure" and st.aggro.show, st.aggro.flash)
-  ShowFlash(f.unstable, kind == "insecure", st.unstable.flash)
   ShowFlash(f.nothreat, kind == "lost" and st.nothreat.show, st.nothreat.flash)
-  if aggroText and kind == "lost" then AggroText() end
 end
 
 function V.Hide(plate)

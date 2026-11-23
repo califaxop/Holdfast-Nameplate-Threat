@@ -14,7 +14,7 @@ local function UpdateUnit(unit)
   -- Preview mode: show a look ("secure" or "lost") on your target's nameplate.
   if ns.preview then
     local isTarget = UnitIsUnit(unit, "target")
-    if ns.Readable(isTarget) and isTarget then st = { kind = ns.preview, pct = 42, closest = (ns.preview == "secure") and 35 or 86 } end
+    if ns.Readable(isTarget) and isTarget then st = { kind = ns.preview, dps = S.Mode() == "dps" } end
   end
   V.Render(plate, st, unit)
 end
@@ -164,15 +164,12 @@ SlashCmdList.HOLDFAST = function(msg)
         "| role:", S.Role(true) or "not set")
       for unit in R.Each() do
         n = n + 1
-        local okS, sit = pcall(UnitThreatSituation, "player", unit)
-        local okL, lead = pcall(function() return UnitThreatLeadSituation and UnitThreatLeadSituation(tank or "player", unit) end)
+        local okT, isT = pcall(UnitDetailedThreatSituation, tank or "player", unit)
         local st = S.Get(unit)
-        ns.Dbg(unit, "step (you)=" .. (okS and show(sit) or "error"), "lead (" .. (tank or "you") .. ")=" .. (okL and show(lead) or "error"),
-          "-> " .. (st and st.kind or "?"))
+        ns.Dbg(unit, "on " .. (tank == "pet" and "your pet" or "you") .. "=" .. (okT and show(isT) or "error"), "-> " .. (st and st.kind or "?"))
       end
-      ns.Dbg("nameplates tracked:", n, "| client can show hidden values:",
-        V.HasSecretSupport() and "yes" or "no",
-        "| hidden states turned into glows:", ns.curveState)
+      ns.Dbg("nameplates tracked:", n, "| hidden answers drive the glows:",
+        V.HasSecretSupport() and "yes" or "no (this client can't)")
     end
   else
     ns.Print("/hf (settings)  -  /hf icon | aggro  -  /hf debug  -  /hf tank")

@@ -1,11 +1,9 @@
--- Threat State: the game's own threat states for each enemy (what its nameplate aggro display
--- uses), and their transitions.
+-- Threat State: for each enemy, is it attacking you (or your pet, when it tanks)? And the
+-- transitions between that and not.
 --
 -- Native API (the game may hide the answers in some content):
---   UnitThreatLeadSituation(unit, mob) -> 0-3: how far ahead of the next highest (3 = not first)
---   UnitThreatSituation(unit, mob)     -> 0-3, or nil when not on its threat list:
---     0 = not tanking, lower threat   1 = not tanking, higher threat (about to pull)
---     2 = tanking, someone is close    3 = tanking securely
+--   UnitDetailedThreatSituation(unit, mob) -> isTanking, ...  (isTanking stays usable when hidden)
+--   UnitThreatSituation(unit, mob)         -> nil when not on its threat list
 local _, ns = ...
 local S = {}
 ns.State = S
@@ -82,27 +80,10 @@ end
 
 -- A state table, from your point of view (as the tank - you or your pet - or not):
 --   kind = "none"      not engaged with you, your pet or your group
---        | "secure"    the tank holds it safely / you're well below the tank
---        | "insecure"  someone's closing in on the tank / you're about to pull it
---        | "lost"      the tank lost it / it's on you
---        | "hidden"    the game hides the state: .step is the hidden step (see Step)
+--        | "secure"    the tank: it's on you (holding) / not the tank: it isn't (safe)
+--        | "lost"      the tank: it's not on you / not the tank: it is (you pulled it)
+--        | "hidden"    the game hides it: .isTanking is the hidden "is it on you"
 --   dps = not the tank; tank = "player" / "pet"
--- The threat state the game's own aggro display uses (a step, 0-3), from your point of view:
---   As the tank (you, or your pet): UnitThreatLeadSituation - how far ahead of the next highest
---     you are. 0 = safely ahead, 1-2 = someone's closing in, 3 = you're not first (lost).
---   Not the tank: UnitThreatSituation("player") - 0 = well below the tank, 1 = about to pull it,
---     2-3 = it's on you.
--- These steps are hidden less often than the threat % (a separate restriction in the game); when
--- they are hidden too, the renderer turns the hidden step into the right glow without reading it.
-local function Step(followed, unit, dps)
-  if dps then return UnitThreatSituation("player", unit) end
-  if UnitThreatLeadSituation then return UnitThreatLeadSituation(followed, unit) end
-  -- (no lead state in this client: from the detailed status: 3 safe, 2 someone close, else lost)
-  local _, status = UnitDetailedThreatSituation(followed, unit)
-  if isSecret(status) then return status end
-  if status == 3 then return 0 elseif status == 2 then return 2 elseif status ~= nil then return 3 end
-end
-
 -- Is anyone (the followed unit, you, your pet, your group) on `unit`'s threat list?
 -- true / false, or "?" when the game hides it.
 local function Engaged(followed, unit)
@@ -116,18 +97,10 @@ local function Engaged(followed, unit)
   return hidden and "?" or false
 end
 
--- readable step -> state kind
-local function KindOf(step, dps)
-  if dps then
-    if step == nil or step == 0 then return "secure" end
-    if step == 1 then return "insecure" end
-    return "lost" -- 2 or 3: it's on you
-  end
-  if step == 0 then return "secure" end
-  if step == 1 or step == 2 then return "insecure" end
-  return "lost"
-end
-
+-- Two states only: is it attacking the one we follow (you, or your pet when it tanks)? The game's
+-- "is tanking" answer, which addons can still use when it's hidden (the renderer hands the hidden
+-- answer straight to the glows). As the tank: on you = holding (good), not = lost. Not the tank:
+-- not on you = safe, on you = you pulled it.
 local function Evaluate(unit)
   if not UnitExists(unit) then return { kind = "none" } end
   local canAttack = UnitCanAttack("player", unit)
@@ -147,13 +120,12 @@ local function Evaluate(unit)
     if Readable(c) and not c then return { kind = "none" } end
   end
 
-  local step = Step(followed, unit, dps)
-  if isSecret(step) then
-    -- the hidden "is it on you" flag too, for clients that can't turn a hidden step into a glow
-    local isTanking = UnitDetailedThreatSituation(followed, unit)
-    return { kind = "hidden", step = step, isTanking = isTanking, dps = dps, tank = followed }
-  end
-  return { kind = KindOf(step, dps), step = step, dps = dps, tank = followed }
+  local isTanking = UnitDetailedThreatSituation(followed, unit)
+  if isSecret(isTanking) then return { kind = "hidden", isTanking = isTanking, dps = dps, tank = followed } end
+  local onYou = isTanking and true or false -- (not on its list: engaged with your group, not you)
+  local kind
+  if dps then kind = onYou and "lost" or "secure" else kind = onYou and "secure" or "lost" end
+  return { kind = kind, dps = dps, tank = followed }
 end
 
 local HAS_AGGRO = { secure = true, insecure = true }

@@ -66,14 +66,12 @@ end
 -- Panel
 ---------------------------------------------------------------------------
 local STATES = {
-  { "aggro",    "Holding",       "You have aggro (or your pet does, when it tanks)." },
-  { "unstable", "Pet: catching up", "Only while your pet tanks: you're at or above the warning % of pulling it off your pet." },
+  { "aggro",    "Holding",       "It's attacking you (or your pet, when it tanks)." },
   { "nothreat", "Lost",          "It's attacking someone else." },
 }
--- the same three glows when you're not the tank
+-- the same two glows when you're not the tank
 local STATES_DPS = {
-  { "aggro",    "Safe",    "It's on someone else, and you're well below them." },
-  { "unstable", "Close",   "You're at or above the warning % of pulling it off them." },
+  { "aggro",    "Safe",    "It's attacking someone else." },
   { "nothreat", "On you",  "You pulled it: it's attacking you." },
 }
 local editSet = "tank" -- which settings the Glows table edits: "tank" or "dps"
@@ -99,7 +97,7 @@ local function BuildPanel(panel)
   at(UI.Text(panel, "line", "My role"), 26, -140)
   track(at(UI.Selector(panel, 300, { { "auto", "Auto: my group-finder role" }, { "tank", "Tank" }, { "dps", "Not the tank (damage / healer)" } },
     S("role"), Changed, "Auto uses the role you picked in the group finder. With no role set (solo, or a group without roles) you're treated as when solo: your pet when it's out, else you as the tank."), 120, -136))
-  local n2 = at(UI.Text(panel, "note", "Tank / solo: green while you (or your pet) hold it, red when it's on someone else. Not the tank: green while the tank has it, orange when you're close, red once you've pulled it."), 26, -164)
+  local n2 = at(UI.Text(panel, "note", "Tank / solo: green while it's on you (or your pet), red with a \"!\" when it's on someone else. Not the tank: green while it's on someone else, red with a \"!\" once it's on you."), 26, -164)
   n2:SetWidth(W_)
 
   -- Glows ------------------------------------------------------------------
@@ -184,7 +182,7 @@ local function BuildPanel(panel)
   track(at(UI.Check(panel, "Only in a party or raid (or when my pet tanks)", S("onlyInGroup"), W_, Changed), 26, y))
   local iconDist
   local icon
-  icon = track(at(UI.Check(panel, "\"!\" when you're about to pull it (as the tank: when you lost it)", S("showIcon"), W_, function()
+  icon = track(at(UI.Check(panel, "\"!\" with the red glow: it's on you (as the tank: you lost it)", S("showIcon"), W_, function()
     Changed(); icon.Refresh()
   end), 26, y - 24))
   iconDist = track(at(UI.Slider(panel, "\"!\" distance", 300, 0, 40, 1, S("iconOffsetX"),
@@ -193,8 +191,7 @@ local function BuildPanel(panel)
   icon.Refresh = function()
     ir(); iconDist.Refresh(); iconDist:SetAlpha(ns.db.showIcon and 1 or 0.4)
   end
-  track(at(UI.Check(panel, "\"AGGRO\" beside the nameplate when it's on you (not the tank)", S("showAggroText"), W_, Changed), 26, y - 94))
-  local rep = track(at(UI.Check(panel, "Replace the game's aggro highlight (its flare above the bar)", S("replaceGameHighlight"), W_, Changed), 26, y - 118))
+  local rep = track(at(UI.Check(panel, "Replace the game's aggro highlight (its flare above the bar)", S("replaceGameHighlight"), W_, Changed), 26, y - 94))
   rep:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Replace the game's aggro highlight", 1, 1, 1)
@@ -202,14 +199,14 @@ local function BuildPanel(panel)
     GameTooltip:Show()
   end)
   rep:HookScript("OnLeave", function() GameTooltip:Hide() end)
-  track(at(UI.Check(panel, "FlareUI style for this window (needs FlareUI)", S("flareStyle"), W_, function() UI.Restyle() end), 26, y - 146))
-  track(at(UI.Check(panel, "EllesmereUI style for this window (needs EllesmereUI)", S("euiStyle"), W_, function() UI.Restyle() end), 26, y - 170))
+  track(at(UI.Check(panel, "FlareUI style for this window (needs FlareUI)", S("flareStyle"), W_, function() UI.Restyle() end), 26, y - 122))
+  track(at(UI.Check(panel, "EllesmereUI style for this window (needs EllesmereUI)", S("euiStyle"), W_, function() UI.Restyle() end), 26, y - 146))
 
   -- Preview ----------------------------------------------------------------
-  y = y - 206
+  y = y - 182
   at(UI.Section(panel, "Preview on your target", W_), 26, y); y = y - 32
   local buttons = {}
-  local MODES = { { "secure", "Holding / safe" }, { "insecure", "Close" }, { "lost", "Lost / on you" } }
+  local MODES = { { "secure", "Holding / safe" }, { "lost", "Lost / on you" } }
   local function SetPreview(mode)
     ns.preview = (ns.preview ~= mode) and mode or nil
     for i, m in ipairs(MODES) do buttons[i].SetLabel(ns.preview == m[1] and "Stop" or m[2]) end
