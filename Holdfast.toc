@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Holdfast
-## Notes: Multi-target threat tracker. Adds a glow to enemy nameplates you don't have aggro on.
+## Notes: See how much threat you're generating on every enemy: a glow and your threat % on its nameplate, for tanks, damage dealers, healers and pet classes.
 ## IconTexture: Interface\AddOns\Holdfast\media\Logo
 ## Author: You
 ## Version: 4.1.0
