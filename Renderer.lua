@@ -385,6 +385,8 @@ local function Create(plate, parent, bar, kind, src)
   local f = CreateFrame("Frame", nil, parent)
   f:SetFrameLevel(bar:GetFrameLevel() + 2) -- just above the bar/border
   f.kind, f.src = kind, src
+  f.uf, f.plate, f.outer, f.watching = false, plate, false, false
+  if kind == "blizzard" then f.uf = parent end -- (the game's plate: what sits left of its bar, see LeftOf)
 
   f:SetAllPoints(bar)
 
@@ -441,11 +443,55 @@ local function QuestieIcon(plate)
   end
 end
 
--- the % in a small box left of the health bar (left of Questie's quest icon when there is one);
--- the "!" left of that (or of the bar, without the %)
+-- On the game's plates, left of the health bar sit (outward): the raid marker (22 px), the elite /
+-- rare icon (20 px), then 5 px on, the enemy's buffs (a row growing left). Each shows only when it
+-- has something to show. Ours go past the outermost one showing, so nothing covers anything; the
+-- buff row is anchored to, so ours follow it as buffs come and go.
+local function T(x) return type(x) == "table" and x or nil end
+local function Shown(fr)
+  if not (T(fr) and fr.IsShown) then return false end
+  local ok, v = pcall(fr.IsShown, fr)
+  return ok and not isSecret(v) and v and true or false
+end
+local function HasShownChild(fr)
+  local ok, kids = pcall(function() return { fr:GetChildren() } end)
+  if not ok then return false end
+  for _, c in ipairs(kids) do if Shown(c) then return true end end
+  return false
+end
+local function LeftOf(f)
+  local uf = T(f.uf)
+  if not uf then return nil end
+  local auras = T(uf.AurasFrame)
+  local buffs = auras and T(auras.BuffListFrame)
+  if Shown(auras) and Shown(buffs) and HasShownChild(buffs) then return buffs, "buffs" end
+  if Shown(T(uf.ClassificationFrame)) then return uf.ClassificationFrame, "elite" end
+  if Shown(T(uf.RaidTargetFrame)) then return uf.RaidTargetFrame, "marker" end
+end
+
+-- the % in a small box left of the health bar (left of Questie's quest icon when there is one, and
+-- past the game's marker, elite icon and buffs, see LeftOf); the "!" left of that (or of them,
+-- without the %)
 local function PlaceText(f, qicon)
   local db = ns.db
   local gap = db.percentGap or 6
+  local outer, what = LeftOf(f)
+  -- (Questie's icon reaches about as far as the marker: past the marker, step out by Questie instead)
+  if outer and not (what == "marker" and qicon) then
+    f.textX, f.outer = gap, outer
+    local key = what .. ":" .. tostring(outer) .. ":" .. gap
+    if f.placedKey == key then return end
+    f.placedKey = key
+    -- as tall as the level box on the right (the bar's height, 3 px above to 2 px below)
+    local okH, h = pcall(f.bar.GetHeight, f.bar)
+    h = (okH and type(h) == "number" and not isSecret(h) and h > 0) and (h + 5) or 15
+    f.pctBox:ClearAllPoints()
+    f.pctBox:SetPoint("TOPRIGHT", outer, "LEFT", -gap, h / 2)
+    f.pctBox:SetPoint("BOTTOMRIGHT", outer, "LEFT", -gap, -h / 2)
+    f.iconKey = nil
+    return
+  end
+  f.outer = false
   -- step past Questie's icon so neither covers the other: how far its left edge reaches past the bar's
   local extra = 0
   if qicon then
@@ -458,7 +504,7 @@ local function PlaceText(f, qicon)
     end
   end
   f.textX = gap + extra -- how far out from the bar the % (or the "!") starts
-  local key = gap .. ":" .. extra
+  local key = "bar:" .. gap .. ":" .. extra
   if f.placedKey == key then return end
   f.placedKey = key
   f.pctBox:ClearAllPoints()
@@ -471,12 +517,13 @@ end
 -- the "!": left of the % box while the % shows, otherwise where the % would start
 local function PlaceIcons(f, pctShown)
   local ix = ns.db.iconOffsetX or 4
-  local key = tostring(pctShown) .. ":" .. ix .. ":" .. (f.textX or 0)
+  local key = tostring(pctShown) .. ":" .. ix .. ":" .. (f.textX or 0) .. ":" .. tostring(f.outer)
   if f.iconKey == key then return end
   f.iconKey = key
   local function placeIcon(fl)
     fl.icon:ClearAllPoints()
     if pctShown then fl.icon:SetPoint("RIGHT", f.pctBox, "LEFT", -ix, 0)
+    elseif f.outer then fl.icon:SetPoint("RIGHT", f.outer, "LEFT", -(f.textX or 6), 0)
     else fl.icon:SetPoint("RIGHT", f.bar, "LEFT", -(f.textX or 6), 0) end
   end
   for _, fl in ipairs({ f.unstable, f.nothreat }) do placeIcon(fl) end
@@ -484,6 +531,25 @@ local function PlaceIcons(f, pctShown)
 end
 
 -- the glow settings in use: yours as the tank (or your pet's), or yours when you're not the tank
+-- the game's plate: place ours again when its buffs, elite icon or raid marker come or go
+-- (between our own updates)
+local function WatchLeft(f)
+  if f.watching or not T(f.uf) then return end
+  f.watching = true
+  local function again()
+    f.placedKey = nil
+    PlaceText(f, f.plate and QuestieIcon(f.plate))
+    PlaceIcons(f, f.pctBox:IsShown() and true or false)
+  end
+  local uf = f.uf
+  local buffs = T(uf.AurasFrame) and T(uf.AurasFrame.BuffListFrame)
+  local cls, rt = T(uf.ClassificationFrame), T(uf.RaidTargetFrame)
+  for _, w in ipairs({ { buffs, "OnSizeChanged" }, { buffs, "OnShow" }, { buffs, "OnHide" },
+    { cls, "OnShow" }, { cls, "OnHide" }, { rt, "OnShow" }, { rt, "OnHide" } }) do
+    if w[1] and w[1].HookScript then pcall(w[1].HookScript, w[1], w[2], again) end
+  end
+end
+
 local function Sets(dps)
   local db = ns.db
   if dps then return db.statesDps, db.colorsDps end
@@ -491,6 +557,7 @@ local function Sets(dps)
 end
 
 local function Style(f, dps, plate)
+  WatchLeft(f)
   PlaceText(f, plate and QuestieIcon(plate))
   StyleBox(f.pctBox, f.kind, f.src)
   local db = ns.db
