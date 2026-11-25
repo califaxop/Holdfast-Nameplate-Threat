@@ -3,7 +3,7 @@
 ## Notes: See how much threat you're generating on every enemy: a glow and your threat % on its nameplate, for tanks, damage dealers, healers and pet classes.
 ## IconTexture: Interface\AddOns\Holdfast\media\Logo
 ## Author: You
-## Version: 5.0.0
+## Version: 5.0.1
 ## X-Curse-Project-ID: 1811726
 ## SavedVariables: HoldfastDB
 ## OptionalDeps: EllesmereUI, FlareUI
