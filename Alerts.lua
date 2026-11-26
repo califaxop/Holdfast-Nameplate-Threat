@@ -12,8 +12,8 @@ local SOUND = (SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959
 
 -- the messages: the player's own (settings: alerts.text), or these
 local DEFAULT = { lostTank = "Lost aggro", lostDps = "Aggro on you", unstableTank = "Losing aggro", unstableDps = "Close to pulling" }
-AL.MESSAGES = { { "lostTank", "Lost it (tank)" }, { "lostDps", "On you (not the tank)" },
-  { "unstableTank", "Losing it (tank)" }, { "unstableDps", "Close to pulling (not the tank)" } }
+AL.MESSAGES = { { "lostTank", "Lost it (tank)" }, { "lostDps", "On you (not tank)" },
+  { "unstableTank", "Losing it (tank)" }, { "unstableDps", "About to pull (not tank)" } }
 function AL.Default(key) return DEFAULT[key] end
 local function Label(key)
   local t = ns.db.alerts.text and ns.db.alerts.text[key]
@@ -22,7 +22,8 @@ end
 
 local frame, text, fade
 -- the message for key (lostTank...), with the enemy's name after it if chosen for that message:
--- "Lost aggro: Scarlet Monk" (or "Aggro lost on: Scarlet Monk" when your text ends in ":" or "-").
+-- "Lost aggro: Scarlet Monk" (or "Aggro lost on: Scarlet Monk" when your text ends in ":" or "-"),
+-- the name in white.
 -- name: the enemy's unit, or a plain sample name (Test)
 local function Message(key, unit, sample)
   if not frame then
@@ -46,7 +47,8 @@ local function Message(key, unit, sample)
   -- so it can't be placed inside your text)
   local sep = label:find("[:%-]%s*$") and " " or ": "
   if ns.isSecret(name) or name ~= nil then
-    text:SetFormattedText("%s%s%s", label, sep, name)
+    -- (the name in white, so it stands out from the message's red or orange)
+    text:SetFormattedText("%s%s|cffffffff%s|r", label, sep, name)
     AL.lastText = label .. sep .. (ns.isSecret(name) and "<name>" or name) -- (tests, diagnostics)
   else
     text:SetText(label); AL.lastText = label

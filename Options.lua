@@ -266,19 +266,20 @@ local function BuildPanel(panel)
   -- a Test button
   y = y - 80
   at(UI.Text(panel, "line", "Messages"), X, y)
-  at(UI.Text(panel, "note", "name"), X + 318, y - 2)
+  local nh = UI.Text(panel, "note", "Add Target Name")
+  nh:SetPoint("TOP", panel, "TOPLEFT", X + 333, y - 2)
   y = y - 22
   for _, m in ipairs(ns.Alerts.MESSAGES) do
     local key = m[1]
-    at(UI.Text(panel, "note", m[2]), X + 12, y - 3)
-    track(at(UI.Edit(panel, 150, { function() return ns.db.alerts.text[key] or "" end,
-      function(v) ns.db.alerts.text[key] = (v ~= "") and v or nil end }, ns.Alerts.Default(key)), X + 160, y))
+    at(UI.Text(panel, "note", m[2]), X + 12, y - 3):SetWidth(150)
+    track(at(UI.Edit(panel, 146, { function() return ns.db.alerts.text[key] or "" end,
+      function(v) ns.db.alerts.text[key] = (v ~= "") and v or nil end }, ns.Alerts.Default(key)), X + 166, y))
     track(at(UI.Check(panel, "", { function() return ns.db.alerts.names[key] ~= false end,
       function(v) ns.db.alerts.names[key] = v end }, 22), X + 322, y))
     at(UI.Button(panel, "Test", 50, function() ns.Alerts.Test(key) end), X + 362, y + 1)
     y = y - 24
   end
-  local an = at(UI.Text(panel, "note", "Your text replaces the default (shown in grey when empty). Name: the enemy's name goes after it. Test: shows it, with your target's name. At most one alert every 2 seconds, and not when an enemy first joins the fight."), X, y - 4)
+  local an = at(UI.Text(panel, "note", "Your text replaces the default (shown in grey when empty). Add Target Name: the enemy's name goes after it, in white. Test: shows it, with your target's name. At most one alert every 2 seconds, and not when an enemy first joins the fight."), X, y - 4)
   an:SetWidth(W_)
 
   y = math.min(y - 40, leftY)
