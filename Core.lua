@@ -16,7 +16,12 @@ ns.DEFAULTS = {
   },
   warnAt            = 80,    -- unstable from this % of what pulls it (when the game lets addons read threat %)
   showPercent       = false, -- threat % beside the nameplate
-  showIcon          = true,  -- "!": it's on you (not the tank), or you lost it (tank); replaces the % at 100%
+  showIcon          = true,
+  -- alerts (off by default): a sound and / or a message on screen when an enemy turns red, and
+  -- (if chosen) orange
+  alerts            = { sound = false, screen = false, onLost = true, onUnstable = false },
+  -- the threat overview window (off by default) and its filter: all / unstable / lost / me / others
+  overview          = { show = false, filter = "all" },  -- "!": it's on you (not the tank), or you lost it (tank); replaces the % at 100%
   replaceGameHighlight = true, -- hide the game's own aggro flare (Aggro Display: Progressive) where Holdfast draws
   percentGap        = 6,       -- the % box: distance left of the health bar (px)
   percentBgAlpha    = 0.8,     -- the % box's background opacity
@@ -101,7 +106,7 @@ function ns.LoadDB()
   for k, d in pairs(ns.DEFAULTS) do
     if db[k] == nil then db[k] = Copy(d) end
   end
-  for _, group in ipairs({ "colors", "states", "colorsDps", "statesDps" }) do
+  for _, group in ipairs({ "colors", "states", "colorsDps", "statesDps", "alerts", "overview" }) do
     for k, d in pairs(ns.DEFAULTS[group]) do
       if db[group][k] == nil then db[group][k] = Copy(d) end
       if group == "states" or group == "statesDps" then

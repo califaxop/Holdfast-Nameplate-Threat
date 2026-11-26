@@ -46,8 +46,9 @@ MOCK.methods = {
   GetValue = function() return 1 end, HasFocus = function() return false end, GetChecked = function(s) return s._checked end,
   GetEffectiveScale = function() return 1 end, IsForbidden = function() return false end,
   NumLines = function() return 0 end,
-  SetFormattedText = function(s, fmt, v)
-    if issecretvalue(v) then s._text = "<game>" else s._text = string.format(fmt, v) end
+  SetFormattedText = function(s, fmt, ...)
+    for i = 1, select("#", ...) do if issecretvalue((select(i, ...))) then s._text = "<game>"; return end end
+    s._text = string.format(fmt, ...)
   end,
   SetTextColor = function(s, r, g, b) s._color = { r, g, b } end,
 }
@@ -111,6 +112,9 @@ UnitThreatLeadSituation = function(who)
   return secState(t.lead)
 end
 GetThreatStatusColor = function() return 1, 0, 0 end
+MOCK.sounds, MOCK.now = 0, 100
+PlaySound = function() MOCK.sounds = MOCK.sounds + 1 end
+GetTime = function() return MOCK.now end
 
 -- the rest --------------------------------------------------------------------------------
 MOCK.tickers = {}

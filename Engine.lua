@@ -115,9 +115,20 @@ Scan = function()
     V.HasSecretSupport() and "yes" or "no (this client can't)")
 end
 
--- with /hf debug on: each change, with what the game answered at that moment
+-- each change: to the transition events (alerts, overview, other addons); with /hf debug on, also
+-- printed with what the game answered at that moment
 S.onTransition = function(unit, old, new)
   if ns.debug then ns.Dbg(unit, old.kind, "->", new.kind, "|", Owner(new), "|", ThreatLine(unit)) end
+  ns.Events.Transition(unit, old, new)
+end
+
+-- your target changed: TARGET_CHANGED with its state, when it has a nameplate
+local function TargetChanged()
+  for unit in R.Each() do
+    local ok, is = pcall(UnitIsUnit, unit, "target")
+    if ok and not ns.isSecret(is) and is then ns.Events.Fire("TARGET_CHANGED", ns.Events.Payload(unit, S.Get(unit))); return end
+  end
+  ns.Events.Fire("TARGET_CHANGED", ns.Events.Payload(nil, nil))
 end
 
 local ev = CreateFrame("Frame")
@@ -133,6 +144,7 @@ ev:SetScript("OnEvent", function(_, event, unit)
       ev:RegisterEvent(e)
     end
     SafetyNet(InCombatLockdown and InCombatLockdown()) -- (a /reload in combat)
+    if ns.db.overview.show then ns.Overview.Show(true) end
     ns.Print("loaded. Type |cffffff00/hf|r for commands.")
   elseif event == "NAME_PLATE_UNIT_ADDED" then
     V.Invalidate(R.Add(unit)); UpdateUnit(unit) -- (at once: a plate appearing shows its glow straight away)
@@ -148,6 +160,7 @@ ev:SetScript("OnEvent", function(_, event, unit)
     -- the group, its roles or a pet changed (summoned, dismissed, died, replaced): look again
     if ROSTER_EVENTS[event] then S.RosterChanged() end
     if event == "PLAYER_REGEN_DISABLED" then SafetyNet(true) elseif event == "PLAYER_REGEN_ENABLED" then SafetyNet(false) end
+    if event == "PLAYER_TARGET_CHANGED" then C_Timer.After(0, TargetChanged) end -- (after the plates update)
     UpdateAllSoon()
   end
 end)
@@ -246,6 +259,18 @@ SlashCmdList.HOLDFAST = function(msg)
     if ns.debug then Scan() end
   elseif cmd == "scan" then
     Scan()
+  elseif cmd == "overview" then
+    -- /hf overview: show or hide it; /hf overview all | unstable | lost | me | others: its filter
+    if arg ~= "" then
+      local ok = false
+      for _, f in ipairs(ns.Overview.FILTERS) do if f[1] == arg then ok = true end end
+      if not ok then ns.Print("overview filters: all, unstable, lost, me, others"); return end
+      db.overview.filter = arg
+      ns.Overview.Show(true)
+    else
+      ns.Overview.Show(not ns.Overview.IsShown())
+    end
+    return
   elseif cmd == "perf" then
     local n = 0
     for _ in R.Each() do n = n + 1 end
@@ -269,7 +294,7 @@ SlashCmdList.HOLDFAST = function(msg)
     return
   else
     if cmd ~= "help" then ns.Print("unknown command \"" .. cmd .. "\". The commands:") end
-    ns.Print("/hf (settings)  -  /hf icon | aggro  -  /hf debug  -  /hf scan  -  /hf perf  -  /hf tank")
+    ns.Print("/hf (settings)  -  /hf overview [all | unstable | lost | me | others]  -  /hf icon | aggro  -  /hf debug  -  /hf scan  -  /hf perf  -  /hf tank")
     return
   end
   ns.lookGen = (ns.lookGen or 0) + 1 -- (a setting changed: every plate restyles)

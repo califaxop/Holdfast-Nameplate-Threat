@@ -112,6 +112,14 @@ when the unit would pull. Milestone 2 must check this in game before relying on 
 | `C_Timer.NewTicker(1, fn)` / `:Cancel()` | The in-combat safety check | Docs; used in game (the 0.25 s ticker before 5.3.0) |
 | `debugprofilestop()` | Milliseconds, for `/hf perf`'s average update time | Docs (FrameScript) |
 
+## Alerts and overview
+
+| API | Notes | Status |
+|---|---|---|
+| `PlaySound(soundKitID [, channel])` | `SOUNDKIT.RAID_WARNING` (8959, in Forever's SoundKitConstants) on "Master" | Docs |
+| `UnitName(unit)` | Secret when unit name identity is restricted: never compared or read, only handed to `SetFormattedText` | Docs |
+| `GetTime()` | The alerts' 2-second gap | Docs |
+
 ## Testing an API in game
 
 - `/hf scan` (any time), and `/hf debug` (on: the same, then again at every state change): per enemy, the followed unit's `isTanking` (`on you=`),

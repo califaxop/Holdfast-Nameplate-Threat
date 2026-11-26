@@ -12,6 +12,8 @@ A glow around each enemy's nameplate shows at a glance whether it's attacking yo
 - **Replaces the game's aggro highlight:** on the nameplates it draws, the game's "Progressive" flare is hidden (switch it in the settings). The game's Flash and Health Bar Color options stay yours to use.
 - **Every glow is yours to tune:** color, on/off, flash, strength and flash interval, in the style you like: nameplate border, outline, pixel lines or autocast sparkles.
 - **Fits your UI:** works on FlareUI's and EllesmereUI's nameplates, in their look. The "!" stays clear of the elite icon, raid marker and enemy buffs.
+- **Alerts (optional):** a sound and / or a message on screen when an enemy turns red (you lost it, or it's on you), and if you like when it turns orange. Never more than one every 2 seconds.
+- **Threat overview (optional):** a small window listing the enemies on your nameplates, most dangerous first, with who each is attacking and the threat %. Filter it to only red, only orange, attacking you or attacking others.
 - **Pet tanking:** follows your Voidwalker or other pet, or you and your pet together.
 - **For healers:** "The group's tanks" shows whether a tank holds each enemy (green), is about to lose it (orange), or it's loose on someone else (red).
 - **Smart role:** uses your group-finder role; with none set, it acts like solo.
@@ -28,6 +30,7 @@ A glow around each enemy's nameplate shows at a glance whether it's attacking yo
 | `/hf icon` | Turn the "!" on or off |
 | `/hf debug` | Show what the game says for each enemy now, and at every change while it's on |
 | `/hf scan` | Show what the game says for each enemy now |
+| `/hf overview` | Show or hide the threat overview (`/hf overview lost`, `unstable`, `me`, `others`, `all`: what it lists) |
 | `/hf perf` | Show how much work Holdfast is doing (add `reset` to start counting again) |
 
 ## Good to know
@@ -42,6 +45,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/holdfast-nameplate-threat/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
+- **5.4.0:** Optional alerts: a sound and / or a message on screen when an enemy turns red (you lost it, or it's on you), and if you choose when it turns orange; not when enemies first join a pull, and at most one every 2 seconds. Optional threat overview window (`/hf overview`): the enemies on your nameplates, most dangerous first, with who each is attacking and the threat %, with filters. Other addons can listen to Holdfast's threat changes (HoldfastAPI).
 - **5.3.0:** Lighter: Holdfast now works from the game's threat events instead of checking every nameplate four times a second (a once-a-second check runs only in combat), merges bursts of events into one update per enemy, and only redraws a nameplate when something on it changes. Moving glows (pixel lines, autocast sparkles) share one animation driver that stops when none are showing. FlareUI and EllesmereUI support now lives in its own module. New `/hf perf` shows the work it's doing.
 - **5.2.0:** Knows who each enemy is attacking: you, your pet, a group tank, another member or a member's pet (shown by `/hf debug` and `/hf scan`). Two new "Whose aggro" choices: **Me and my pet** (either of you holding it is good) and **The group's tanks** (any tank holding it is good; for healers, and with more than one tank). Your group is looked up once when it changes instead of on every update.
 - **5.1.0:** Three states again, reliable in groups: orange when someone is closing in on you (tank) or you're about to pull it (not the tank), from the same threat states the game's own nameplates use, which the game keeps readable in groups. Optional threat % beside the nameplate (in groups the game draws the hidden number itself), with its distance and box opacity. "Warn at" for where threat % is readable (solo). New "Losing it / close" glow row and preview. `/hf scan` shows each enemy's state and where it came from.

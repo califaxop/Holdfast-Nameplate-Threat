@@ -236,7 +236,7 @@ function S.Update(unit)
   local new = Evaluate(unit)
   local old = states[unit]
   states[unit] = new
-  if S.onTransition and old and old.kind ~= new.kind then S.onTransition(unit, old, new) end
+  if S.onTransition and old and (old.kind ~= new.kind or old.ownerUnit ~= new.ownerUnit) then S.onTransition(unit, old, new) end
   return new
 end
 

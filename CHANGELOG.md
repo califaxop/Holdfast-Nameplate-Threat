@@ -1,5 +1,21 @@
 # Changelog
 
+## 5.4.0 (Milestone 5: notifications, overview, customization)
+
+- Transition events (Events.lua): STATE_CHANGED, AGGRO_GAINED, AGGRO_LOST, PET_AGGRO_GAINED,
+  PET_AGGRO_LOST, THREAT_UNSTABLE, THREAT_SECURE, TARGET_CHANGED, UNIT_UNTRACKABLE. Payloads
+  carry the state, who it's on (observed or inferred), the role and confidence, and the % only
+  when readable. A change of owner alone now counts as a change.
+- `HoldfastAPI` for other addons: `RegisterCallback(event, fn)`, `UnregisterCallback(handle)`,
+  `GetState(unit)`, `Events`.
+- Alerts (off by default): sound (the game's raid warning) and / or a message on screen, on red,
+  and optionally on orange; not when an enemy first joins the fight; at most one every 2 s.
+  A Test button in the settings.
+- Threat overview (off by default; `/hf overview [all | unstable | lost | me | others]`): the
+  enemies on your plates, most dangerous first, with state, who it's on, the % (a hidden one drawn
+  by the game) and an asterisk when who it's on is inferred. Movable; remembers where it was.
+  Built only when first shown; its half-second refresh runs only while it's shown.
+
 ## 5.3.0 (Milestone 4: rendering and performance)
 
 - Event-driven: the 0.25 s ticker over every plate is gone. Threat-list updates are merged per

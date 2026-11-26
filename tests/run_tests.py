@@ -292,6 +292,71 @@ def _(L, ns):
       assert(out:find("blizzard 1") and out:find("threat evaluations"), out)
     ''')
 
+@test("M5 transition events (HoldfastAPI): aggro gained / lost, pet, unstable, secure, untrackable, target; no hidden values")
+def _(L, ns):
+    lua(L, '''
+      local got = {}
+      for _, e in ipairs(HoldfastAPI.Events) do
+        HoldfastAPI.RegisterCallback(e, function(ev, p) got[#got + 1] = ev .. ":" .. p.kind; got.last = p end)
+      end
+      local function seen(ev) for _, g in ipairs(got) do if g:find("^" .. ev .. ":") then return true end end end
+      NS.db.role = "dps"; MOCK.Group(true); MOCK.roles = { party1 = "TANK" }; MOCK.Group(true); MOCK.hiddenValues = true
+      MOCK.threat = { party1 = { status = 3 }, player = { status = 0, pct = 40 } }; MOCK.Look()
+      got = {}; MOCK.threat.player.status = 1; MOCK.Look()
+      assert(seen("THREAT_UNSTABLE") and seen("STATE_CHANGED"), table.concat(got, " "))
+      assert(got.last.percentage == nil, "a hidden % is never in a payload")
+      got = {}; MOCK.threat = { player = { status = 3 }, party1 = { status = 0 } }; MOCK.Look()
+      assert(seen("AGGRO_GAINED"), table.concat(got, " "))
+      got = {}; MOCK.threat = { party1 = { status = 3 }, player = { status = 0 } }; MOCK.Look()
+      assert(seen("AGGRO_LOST") and seen("THREAT_SECURE"), table.concat(got, " "))
+      got = {}; MOCK.pet = true; MOCK.Fire("UNIT_PET", "player"); MOCK.RunTimers()
+      MOCK.threat = { pet = { status = 3 }, player = { status = 0 } }; MOCK.Look()
+      assert(seen("PET_AGGRO_GAINED"), "the pet took it, your state still safe: " .. table.concat(got, " "))
+      got = {}; MOCK.threat = { party1 = { status = 3 }, player = { status = 0 } }; MOCK.Look()
+      assert(seen("PET_AGGRO_LOST"), table.concat(got, " "))
+      got = {}; MOCK.hidden = true; MOCK.threat = { player = { tanking = false, status = 0 } }; MOCK.Look()
+      assert(seen("UNIT_UNTRACKABLE"), table.concat(got, " "))
+      got = {}; MOCK.Fire("PLAYER_TARGET_CHANGED"); MOCK.RunTimers(); MOCK.RunTimers()
+      assert(seen("TARGET_CHANGED"), table.concat(got, " "))
+      assert(HoldfastAPI.GetState("nameplate1").kind == "hidden")
+    ''')
+
+@test("M5 alerts: off by default; red (not on joining the fight), orange if chosen; at most one every 2 s")
+def _(L, ns):
+    lua(L, '''
+      NS.db.role = "tank"; MOCK.threat = { player = { status = 3, lead = 0 } }; MOCK.Look()
+      MOCK.threat.player.status = 0; MOCK.Look(); assert(MOCK.sounds == 0, "off by default")
+      NS.db.alerts.sound = true
+      MOCK.threat.player.status = 3; MOCK.Look(); MOCK.now = MOCK.now + 5
+      MOCK.threat.player.status = 0; MOCK.Look(); assert(MOCK.sounds == 1, "lost it: one sound")
+      MOCK.threat.player.status = 3; MOCK.Look(); MOCK.threat.player.status = 0; MOCK.Look()
+      assert(MOCK.sounds == 1, "again within 2 s: no sound")
+      MOCK.now = MOCK.now + 5; MOCK.threat.player = { status = 3, lead = 2 }; MOCK.Look()
+      assert(MOCK.sounds == 1, "orange: not chosen")
+      NS.db.alerts.onUnstable = true; MOCK.threat.player.lead = 0; MOCK.Look(); MOCK.threat.player.lead = 1; MOCK.Look()
+      assert(MOCK.sounds == 2, "orange, chosen")
+      MOCK.now = MOCK.now + 5; MOCK.threat = {}; MOCK.Look()
+      MOCK.threat = { party1 = { status = 3 } }; MOCK.Group(true); MOCK.Look()
+      assert(MOCK.sounds == 2, "joining the fight on someone else: no alert")
+      NS.db.alerts.screen = true; NS.Alerts.Test()
+    ''')
+
+@test("M5 overview: nothing built while off; most dangerous first; filters; hiding stops its updates")
+def _(L, ns):
+    lua(L, '''
+      assert(not NS.Overview.IsShown())
+      local before = #MOCK.tickers
+      for i = 2, 4 do MOCK.AddPlate(i); MOCK.Fire("NAME_PLATE_UNIT_ADDED", "nameplate" .. i) end
+      NS.db.role = "tank"; MOCK.threat = { player = { status = 3, lead = 0 } }; MOCK.Look()
+      SlashCmdList.HOLDFAST("overview")
+      assert(NS.Overview.IsShown() and #MOCK.tickers == before + 1, "shown, with its half-second refresh")
+      NS.Overview.Refresh()
+      SlashCmdList.HOLDFAST("overview lost"); assert(NS.db.overview.filter == "lost")
+      PRINTS = {}; SlashCmdList.HOLDFAST("overview nonsense"); assert(table.concat(PRINTS):find("overview filters"))
+      SlashCmdList.HOLDFAST("overview")
+      assert(not NS.Overview.IsShown() and MOCK.tickers[#MOCK.tickers].cancelled and NS.db.overview.show == false)
+    ''')
+
 @test("renderer: a host switch (EllesmereUI plate shows late) reuses indicators, no new frames")
 def _(L, ns):
     lua(L, '''

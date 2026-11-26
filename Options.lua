@@ -226,8 +226,29 @@ local function BuildPanel(panel)
   end)
   rep:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
-  -- Preview ----------------------------------------------------------------
+  -- Alerts -----------------------------------------------------------------
   y = y - 106
+  at(UI.Section(panel, "Alerts", W_), 26, y); y = y - 32
+  local function A(key) return { function() return ns.db.alerts[key] end, function(v) ns.db.alerts[key] = v end } end
+  track(at(UI.Check(panel, "Sound", A("sound"), 120, Changed), 26, y))
+  track(at(UI.Check(panel, "Message on screen", A("screen"), 180, Changed), 150, y))
+  at(UI.Button(panel, "Test", 70, function() ns.Alerts.Test() end), 26 + 350, y + 2)
+  track(at(UI.Check(panel, "When it turns red (you lost it / it's on you)", A("onLost"), W_, Changed), 26, y - 24))
+  track(at(UI.Check(panel, "When it turns orange (losing it / close to pulling it)", A("onUnstable"), W_, Changed), 26, y - 48))
+  local an = at(UI.Text(panel, "note", "At most one alert every 2 seconds, and not when an enemy first joins the fight."), 26, y - 74)
+  an:SetWidth(W_)
+
+  -- Overview ---------------------------------------------------------------
+  y = y - 104
+  at(UI.Section(panel, "Threat overview", W_), 26, y); y = y - 32
+  track(at(UI.Check(panel, "Show the overview window (/hf overview)",
+    { function() return ns.db.overview.show end, function(v) ns.Overview.Show(v) end }, W_), 26, y))
+  track(at(UI.Selector(panel, 260, ns.Overview.FILTERS,
+    { function() return ns.db.overview.filter end, function(v) ns.db.overview.filter = v end },
+    function() ns.Overview.Refresh() end, "Which enemies it lists, most dangerous first."), 26, y - 28))
+
+  -- Preview ----------------------------------------------------------------
+  y = y - 96
   at(UI.Section(panel, "Preview on your target", W_), 26, y); y = y - 32
   local buttons = {}
   local MODES = { { "secure", "Holding / safe" }, { "unstable", "Losing it / close" }, { "lost", "Lost / on you" } }

@@ -13,12 +13,12 @@ isn't, and tracks the milestone plan. API facts and their verification status li
 | 2 | Threat classification and percentage engine | Done in 5.1.0, validated in game (tank: all three states; not the tank: the hidden %). Orange as not the tank and "Warn at" solo still to see |
 | 3 | Multi-unit ownership and pet tracking | Done in 5.2.0, validated in game (ownership in a party). "The group's tanks", "Me and my pet" still to see |
 | 4 | Rendering and performance improvements | Done in 5.3.0, validated in game (0.1 ms passes; animation driver on and off with the fight; safety check only in combat) |
-| 5 | Notifications, overview and customization | Not started |
+| 5 | Notifications, overview and customization | **Done in 5.4.0, waiting for in-game validation** |
 | 6 | Diagnostics, validation and release preparation | Not started |
 
-## Architecture (as it actually runs, 5.3.0)
+## Architecture (as it actually runs, 5.4.0)
 
-Load order (Holdfast.toc): Core → UnitRegistry → ThreatState → Adapters → Renderer → UI → Options → Engine.
+Load order (Holdfast.toc): Core → UnitRegistry → ThreatState → Adapters → Renderer → UI → Events → Alerts → Overview → Options → Engine.
 Every file shares the addon namespace `ns`.
 
 | File | Module | Does |
@@ -28,6 +28,9 @@ Every file shares the addon namespace `ns`.
 | ThreatState.lua | `ns.State` | Role and mode (whose aggro), evaluation of one enemy into a state table, last state per unit, a transition callback |
 | Adapters.lua | `ns.Adapters` | Nameplate adapters: EllesmereUI, FlareUI, the game's plate, a generic fallback. Each finds the host frame and bar for a plate (validated), and gives its font and its % box look |
 | Renderer.lua | `ns.Renderer` | Finds the host (EllesmereUI / FlareUI / the game's plate), builds and reuses indicator frames, glow styles, the "!" and % placement, hides the game's aggro flare |
+| Events.lua | `ns.Events`, `HoldfastAPI` | Transition events (STATE_CHANGED, AGGRO_GAINED / LOST, PET_AGGRO_GAINED / LOST, THREAT_UNSTABLE / SECURE, TARGET_CHANGED, UNIT_UNTRACKABLE), payloads without hidden values, and the public API for other addons |
+| Alerts.lua | `ns.Alerts` | Optional sound / on-screen message when an enemy turns red (and orange, if chosen); not on joining the fight; at most one every 2 s |
+| Overview.lua | `ns.Overview` | Optional window: enemies on your plates, most dangerous first, with state, owner, % and filters; built and updated only while shown |
 | UI.lua | `ns.UI` | The shared settings-window kit (also used by the other addons); FlareUI / EllesmereUI skins |
 | Options.lua | — | The settings window and the Esc > Options > AddOns entry |
 | Engine.lua | — | Events, the update loop and the slash commands |
@@ -47,7 +50,8 @@ Every file shares the addon namespace `ns`.
    refresh the cached roster.
    Combat start → a 1 s safety check (every plate) until combat ends.
 3. Updating a unit: `State.Update(unit)` → (the "only in a group" and preview overrides) →
-   `Renderer.Render(plate, state, unit)`.
+   `Renderer.Render(plate, state, unit)`. When its state or owner changed, `State.onTransition` →
+   `Events.Transition` → the events (alerts and the overview listen to STATE_CHANGED).
 
 ### Threat evaluation (ThreatState.lua, `Evaluate`)
 
@@ -124,8 +128,8 @@ Every file shares the addon namespace `ns`.
 | Shared animation manager | 5.3.0: one driver, only glows showing |
 | Nameplate adapters | 5.3.0: EllesmereUI, FlareUI, Blizzard, generic |
 | Performance counters | 5.3.0: `/hf perf` (Milestone 6 adds status, profile, reset) |
-| Transition events | One debug callback (`State.onTransition`). Milestone 5 |
-| Overview window, notifications | Not implemented. Milestone 5 |
+| Transition events | 5.4.0: Events.lua, `HoldfastAPI` for other addons |
+| Overview window, alerts | 5.4.0: optional, off by default |
 | Diagnostics | `/hf debug` (per-enemy threat calls, value / nil / hidden / error / n/a, at every state change), `/hf scan`, `/hf tank`, `/hf tip` probes. Milestone 6 adds status, perf, profile, reset |
 | Tests | `tests/run_tests.py` (logic only, on a mock client). Milestone 6 widens them |
 
@@ -269,6 +273,20 @@ In game (5.3.0, a party, Scarlet Monastery, border glows): 152 update passes ave
 0.098 ms; 126 of 152 updates unchanged (not redrawn); the safety check ran only in combat.
 Pixel glows, solo pull: in combat 2 plates, 2 glows animating; after it 0 tracked, 0 animating,
 safety check off; 75 passes averaging 0.102 ms.
+
+#### Milestone 5 → 6
+
+1. Install 5.4.0, `/reload`. Nothing new shows until you turn it on.
+2. `/hf` → Alerts: tick "Sound" and "Message on screen", press Test: the raid-warning sound and
+   "Lost aggro" in red near the top of the screen.
+3. In a party as not the tank: when a mob turns to you, one sound and "Aggro on you: <name>";
+   none when mobs first join a pull; at most one every 2 seconds. Tick "When it turns orange" and
+   check "Close to pulling: <name>".
+4. `/hf overview`: the window lists the enemies on your plates, red first, then orange, then
+   green, with who each is on and the % (drawn by the game in a party). Drag it; `/reload`: it
+   stays where you put it. `/hf overview lost` / `me` / `all`: the filter. Close it with ×.
+5. Send a screenshot of the overview mid-fight and of an alert, and any Lua errors.
+6. Still open: "The group's tanks", "Me and my pet", "Warn at" solo, "Replace" unticked mid-fight.
 
 ### Performance (mock client, `python3 tests/bench.py`)
 
