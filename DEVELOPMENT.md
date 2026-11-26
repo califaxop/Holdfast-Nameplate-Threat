@@ -12,7 +12,7 @@ isn't, and tracks the milestone plan. API facts and their verification status li
 | 1 | Audit and stabilize the existing implementation | Done in 5.0.2, validated in game (step 5, the flare given back, still to see) |
 | 2 | Threat classification and percentage engine | Done in 5.1.0, validated in game (tank: all three states; not the tank: the hidden %). Orange as not the tank and "Warn at" solo still to see |
 | 3 | Multi-unit ownership and pet tracking | Done in 5.2.0, validated in game (ownership in a party). "The group's tanks", "Me and my pet" still to see |
-| 4 | Rendering and performance improvements | **Done in 5.3.0, waiting for in-game validation** |
+| 4 | Rendering and performance improvements | Done in 5.3.0, validated in game (0.1 ms passes; animation driver on and off with the fight; safety check only in combat) |
 | 5 | Notifications, overview and customization | Not started |
 | 6 | Diagnostics, validation and release preparation | Not started |
 
@@ -267,6 +267,8 @@ or chat output). The next milestone starts only once those results are in.
 
 In game (5.3.0, a party, Scarlet Monastery, border glows): 152 update passes averaging
 0.098 ms; 126 of 152 updates unchanged (not redrawn); the safety check ran only in combat.
+Pixel glows, solo pull: in combat 2 plates, 2 glows animating; after it 0 tracked, 0 animating,
+safety check off; 75 passes averaging 0.102 ms.
 
 ### Performance (mock client, `python3 tests/bench.py`)
 
