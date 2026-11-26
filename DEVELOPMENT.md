@@ -9,14 +9,14 @@ isn't, and tracks the milestone plan. API facts and their verification status li
 
 | # | Milestone | Status |
 |---|---|---|
-| 1 | Audit and stabilize the existing implementation | **Done in 5.0.2, waiting for in-game validation** |
-| 2 | Threat classification and percentage engine | Not started |
+| 1 | Audit and stabilize the existing implementation | Done in 5.0.2, validated in game (step 5, the flare given back, still to see) |
+| 2 | Threat classification and percentage engine | **Done in 5.1.0, waiting for in-game validation** |
 | 3 | Multi-unit ownership and pet tracking | Not started |
 | 4 | Rendering and performance improvements | Not started |
 | 5 | Notifications, overview and customization | Not started |
 | 6 | Diagnostics, validation and release preparation | Not started |
 
-## Architecture (as it actually runs, 5.0.2)
+## Architecture (as it actually runs, 5.1.0)
 
 Load order (Holdfast.toc): Core → UnitRegistry → ThreatState → Renderer → UI → Options → Engine.
 Every file shares the addon namespace `ns`.
@@ -53,13 +53,25 @@ Every file shares the addon namespace `ns`.
 - Engaged: is the followed unit, you, your pet or anyone in your group on the enemy's threat list
   (`UnitThreatSituation` non-nil)? If every answer is hidden, it counts as engaged while the enemy
   is in combat.
-- `UnitDetailedThreatSituation(followed, enemy)` → `isTanking` only:
-  - hidden → `hidden`, carrying the hidden `isTanking` to the renderer;
-  - tank / pet mode: tanking → `secure`, not → `lost`;
-  - dps mode: tanking → `lost`, not → `secure`.
-
-The status, scaled %, raw % and raw threat it also returns are not used, nor are
-`UnitThreatLeadSituation` or `UnitThreatPercentageOfLead`.
+- The game hides two things separately (measured in a party, Nov 2026): the threat **state**
+  (`UnitThreatSituation` status 0–3, `UnitThreatLeadSituation` 0–3) stays readable; the threat
+  **values** (`UnitDetailedThreatSituation`: isTanking, %) are hidden.
+- State hidden too → `hidden`: the hidden `isTanking` goes to the renderer, which switches the
+  glows with it (two states, as in 5.0).
+- State readable (on the followed unit = status 2 or 3):
+  - **Tank / pet:** not on it → `lost`; on it with status 2 (someone has more threat), or lead
+    1–2 (someone closing in), or (values readable) anyone else at "Warn at" or more → `unstable`;
+    else `secure`. The % is the closest other's (only when readable: hidden values can't be
+    compared to find the highest).
+  - **Not the tank:** on you → `lost`; status 1 (above the tank, not yet pulling) or (values
+    readable) your % at "Warn at" or more → `unstable`; else `secure`. The % is yours (hidden or
+    not: a hidden one is drawn by the game).
+- Each state also carries `ownership` ("followed", or "other": inferred, the game only says it
+  isn't the followed unit), `status`, `lead`, `percentage` and `confidence` ("values", "state",
+  "hidden", "none"). See the comment above `Evaluate`.
+- Pull threshold: not applied by Holdfast. The game's scaled % is already a % of what pulls it
+  (110% of the tank's threat in melee range, 130% at range, in Classic); not yet verified on
+  Forever.
 
 ### Rendering (Renderer.lua)
 
@@ -68,7 +80,7 @@ The status, scaled %, raw % and raw threat it also returns are not used, nor are
 - One indicator per host bar and glow style, made once and reused (frames can't be freed). Each
   has three glows (`aggro`, `unstable`, `nothreat`; each a holder frame, an inner frame with an
   alpha bounce animation, the glow textures and a "!"), plus a % box.
-- States: `secure` → the `aggro` glow; `lost` → the `nothreat` glow with the "!"; `hidden` →
+- States: `secure` → the `aggro` glow; `unstable` → the `unstable` glow; `lost` → the `nothreat` glow with the "!"; `hidden` →
   both glows shown, each made visible or invisible by the game through
   `SetAlphaFromBoolean(isTanking)`; `none` → nothing.
 - Glow styles: border (the plate's own selection-border art), outline, pixel lines, autocast
@@ -87,8 +99,8 @@ The status, scaled %, raw % and raw threat it also returns are not used, nor are
 | Glow styles, colors, strength, flash, interval per glow and per role | Working |
 | Replacing the game's flare | Working (now also given back when turned off) |
 | Preview on your target | Working |
-| **Unstable** (someone close to taking it / you close to pulling it) | **Not reachable.** The glow exists and has settings defaults, but `Evaluate` never returns it and the settings window no longer shows it. Milestone 2 |
-| **Threat %** | **Not reachable.** The % box and its placement settings (`percentGap`, `percentBgAlpha`) exist, but nothing sets its text or shows it. Milestone 2 |
+| Unstable (someone close to taking it / you close to pulling it) | 5.1.0: from the game's states in groups, plus "Warn at" where % is readable |
+| Threat % | 5.1.0: optional; readable shown capped at 100, hidden drawn by the game |
 | Ownership beyond "on the followed unit or not" | Not implemented. Milestone 3 |
 | Guardians / summons other than `pet` | Not implemented. Milestone 3 |
 | Event-driven updates without the ticker | Partly (events + 0.25 s ticker). Milestone 4 |
@@ -154,8 +166,7 @@ sets (about 33 frames and 34 textures), and pixel / autocast styles had 8 driver
 No unused code or settings: before each release, `luacheck` must show no unused variables or
 functions, and every saved setting must be read somewhere. A removed setting's code goes with it
 (an old saved value is simply never read). The only kept exceptions are the
-renderer's dormant unstable glow and % box (Milestone 2 turns them on) and the test seams
-`Renderer.Indicator` / `Renderer.Counts`.
+test seams `Renderer.Indicator` / `Renderer.Counts`.
 
 ## Testing
 
@@ -189,6 +200,23 @@ or chat output). The next milestone starts only once those results are in.
    the data Milestone 2 needs: whether the threat *state* (0–3) stays readable when the threat
    *values* are hidden.
 
+#### Milestone 2 → 3
+
+1. Install 5.1.0, `/reload`. In `/hf`, tick "Threat % beside the nameplate".
+2. Solo: fight a mob. Green while it's on you. If you have a pet, let it build threat: orange,
+   then red with "!" when it takes the mob (as the tank). Set "My role: Not the tank" and let the
+   pet tank: orange once your % passes "Warn at", red once you pull it. The % shows a number.
+3. Preview buttons: each of the three looks, with a sample %.
+4. In a party, as the tank, with `/hf debug` on: green while you hold, orange when a damage
+   dealer closes in (the line shows `lead=1` or `2`, or `status=2`), red with "!" if they pull.
+   The % beside the plate shows the closest other's when readable (solo); in a party it stays
+   empty for a tank.
+5. In a party, not the tank (or "My role: Not the tank"): orange when you're above the tank
+   (`status=1`), red when you pull it. The % beside the plate shows a number drawn by the game
+   (this checks that a hidden % can be shown).
+6. Untick "Replace the game's aggro highlight" mid-fight: the game's flare comes back at once.
+7. Send screenshots of 4 and 5 (plate and chat), and any Lua errors.
+
 ## Known limitations (from earlier in-game tests)
 
 - In a party in combat, `UnitDetailedThreatSituation`'s answers (isTanking, status, %) were
@@ -196,5 +224,7 @@ or chat output). The next milestone starts only once those results are in.
 - Turning a hidden number into a glow through curves (`C_CurveUtil`, `Curve:Evaluate`) was
   refused for addons.
 - The tooltip's "% Threat" line was not readable by addons in a party.
-- Not measured yet: `UnitThreatSituation` and `UnitThreatLeadSituation` in a party
-  (`/hf debug`, step 6 above).
+- Measured in a party (5.0.2, `/hf debug`): `UnitThreatSituation` and `UnitThreatLeadSituation`
+  readable (`status=0 lead=3`, `status=3 lead=0`), `C_Secrets.ShouldUnitThreatStateBeSecret` false,
+  `ShouldUnitThreatValuesBeSecret` true; isTanking and % hidden.
+- Not measured yet: a hidden % drawn with `SetFormattedText` (docs allow it), and raids.

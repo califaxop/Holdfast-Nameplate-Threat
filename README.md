@@ -2,12 +2,13 @@
 
 **See at a glance who has aggro, right on the enemy's nameplate.**
 
-A glow around each enemy's nameplate shows at a glance whether it's attacking you, in your colors and style. Tanks see whether they're holding it; damage dealers and healers see whether they've pulled it. Built for tanks, damage dealers, healers and pet classes alike.
+A glow around each enemy's nameplate shows at a glance whether it's attacking you, and how safely, in your colors and style. Tanks see whether they're holding it or about to lose it; damage dealers and healers see whether they're about to pull it, or have. Built for tanks, damage dealers, healers and pet classes alike.
 
 ## Highlights
-- **Tank:** green while it's on you (or your pet); red with a "!" when it's on someone else.
-- **Not the tank:** green while it's on someone else; red with a "!" once it's on you.
-- **Works in dungeons and groups:** even when the game hides threat, it still lets Holdfast use its "is it attacking you" answer, and the glows follow it.
+- **Tank:** green while it's on you (or your pet); orange when someone is closing in on you; red with a "!" when it's on someone else.
+- **Not the tank:** green while it's on someone else; orange when you're about to pull it; red with a "!" once it's on you.
+- **Works in dungeons and groups:** it follows the same threat states as the game's own nameplate aggro display, which the game keeps readable in groups.
+- **Threat %** beside the nameplate (optional): yours, or, as the tank, the closest other's. In groups the game hides the number from addons, so Holdfast lets the game draw it.
 - **Replaces the game's aggro highlight:** on the nameplates it draws, the game's "Progressive" flare is hidden (switch it in the settings). The game's Flash and Health Bar Color options stay yours to use.
 - **Every glow is yours to tune:** color, on/off, flash, strength and flash interval, in the style you like: nameplate border, outline, pixel lines or autocast sparkles.
 - **Fits your UI:** works on FlareUI's and EllesmereUI's nameplates, in their look. The "!" stays clear of the elite icon, raid marker and enemy buffs.
@@ -28,7 +29,7 @@ A glow around each enemy's nameplate shows at a glance whether it's attacking yo
 | `/hf scan` | Show what the game says for each enemy now |
 
 ## Good to know
-- Holdfast shows two states only (on you or not): in groups the game hides threat % and how close anyone is too often for more to be reliable.
+- Orange comes from the game's own threat states in groups (someone closing in on the tank, or you above the tank but not yet pulling it). Solo, where addons can read threat %, it also starts at **Warn at** (default 80% of pulling it).
 - The game has its own aggro display (Options > Nameplates > Aggro Display). Holdfast hides its "Progressive" flare where Holdfast draws, so you don't see both; its Flash and Health Bar Color options can be used alongside Holdfast.
 - Shown only on enemies fighting you, your pet or your group. "Only in a party or raid" in the settings keeps it off when you're solo (unless your pet tanks).
 
@@ -39,6 +40,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/holdfast-nameplate-threat/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
+- **5.1.0:** Three states again, reliable in groups: orange when someone is closing in on you (tank) or you're about to pull it (not the tank), from the same threat states the game's own nameplates use, which the game keeps readable in groups. Optional threat % beside the nameplate (in groups the game draws the hidden number itself), with its distance and box opacity. "Warn at" for where threat % is readable (solo). New "Losing it / close" glow row and preview. `/hf scan` shows each enemy's state and where it came from.
 - **5.0.2:** Fixes from a full code review. "Whose aggro: My pet" with no pet out no longer shows your own aggro. Holdfast reuses its glow frames instead of building new ones whenever a nameplate switches between the game's and FlareUI's / EllesmereUI's drawing or the glow style changes, hooks each nameplate once, and drops five unused glow sets per nameplate: lighter over a long session. A threat update for your target now shows at once, turning off "Replace the game's aggro highlight" brings the game's flare straight back, and group role changes apply at once. The settings window is readable again with EllesmereUI installed, and its look follows EllesmereUI or FlareUI on its own (no style settings). `/hf debug` also shows the game's threat status calls per enemy, at each change, and the new `/hf scan` shows them for every enemy at once.
 - **5.0.1:** Housekeeping: the aggro diagnostic's helper frame is now named HoldfastProbeFrame (it had a leftover generic name from the AggroGlow days), so it can't clash with another addon's.
 - **5.0.0:** Simpler and reliable in dungeons: two states, from the game's "is it attacking you" answer, which addons can still use when the game hides threat. Tank: green while it's on you, red with a "!" when it isn't. Not the tank: green while it's on someone else, red with a "!" once it's on you. The game's own "Progressive" aggro flare is hidden on the nameplates Holdfast draws (switch in the settings). The threat %, the in-between "close" glow, the "Warn at" slider and reading threat from tooltips are gone: in groups the game hides those too often to be reliable.

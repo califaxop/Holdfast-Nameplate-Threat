@@ -3,6 +3,7 @@
 local _, ns = ...
 local R, S, V = ns.Registry, ns.State, ns.Renderer
 local Scan
+local PREVIEW_PCT = { secure = 45, unstable = 90, lost = 100 }
 
 
 local function UpdateUnit(unit)
@@ -12,10 +13,12 @@ local function UpdateUnit(unit)
   -- "Only show in a party or raid": solo, nothing glows (preview still works)
   -- (your pet tanking counts too: that's usually solo)
   if ns.db.onlyInGroup and not IsInGroup() and S.Mode() ~= "pet" and not ns.preview then st = { kind = "none" } end
-  -- Preview mode: show a look ("secure" or "lost") on your target's nameplate.
+  -- Preview mode: show a look ("secure", "unstable" or "lost", with a sample %) on your target's nameplate.
   if ns.preview then
     local isTarget = UnitIsUnit(unit, "target")
-    if ns.Readable(isTarget) and isTarget then st = { kind = ns.preview, dps = S.Mode() == "dps" } end
+    if ns.Readable(isTarget) and isTarget then
+      st = { kind = ns.preview, dps = S.Mode() == "dps", percentage = PREVIEW_PCT[ns.preview] }
+    end
   end
   V.Render(plate, st, unit)
 end
@@ -66,7 +69,7 @@ Scan = function()
   for unit in R.Each() do
     n = n + 1
     local st = S.Get(unit)
-    ns.Print(unit, "-> " .. (st and st.kind or "?"), "|", ThreatLine(unit))
+    ns.Print(unit, "-> " .. (st and st.kind or "?") .. " (" .. (st and st.confidence or "?") .. ")", "|", ThreatLine(unit))
   end
   ns.Print("nameplates tracked:", n, "| hidden answers drive the glows:",
     V.HasSecretSupport() and "yes" or "no (this client can't)")

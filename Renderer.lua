@@ -10,6 +10,7 @@ local V = {}
 ns.Renderer = V
 
 local isSecret = ns.isSecret
+local ShowPercent
 -- Indicators are frames, and frames can't be freed: each is made once per host bar and glow
 -- style, then reused (nameplates and FlareUI's / EllesmereUI's plates are recycled too).
 local current = {}      -- plate -> the indicator shown on it now
@@ -570,6 +571,25 @@ local function HideAll(f)
   ShowFlash(f.aggro, false); ShowFlash(f.unstable, false); ShowFlash(f.nothreat, false); f.pct:Hide()
 end
 
+-- The threat % in the box beside the bar (setting "showPercent"): not the tank, yours; the tank, the
+-- closest other's. A hidden % is handed to the game to draw (SetFormattedText takes hidden values),
+-- never read; a readable one is capped at 100. In the state's colour (white when that's hidden).
+local GLOW_OF = { secure = "aggro", unstable = "unstable", lost = "nothreat" }
+ShowPercent = function(f, state, colors)
+  local v = state and state.percentage
+  if not (ns.db.showPercent and v ~= nil) then f.pct:Hide(); return end
+  if isSecret(v) then
+    f.pct:SetFormattedText("%.0f%%", v)
+  elseif type(v) == "number" then
+    f.pct:SetFormattedText("%.0f%%", math.min(100, math.max(0, v)))
+  else
+    f.pct:Hide(); return
+  end
+  local c = colors[GLOW_OF[state.kind] or ""]
+  if c then f.pct:SetTextColor(c[1], c[2], c[3]) else f.pct:SetTextColor(1, 1, 1) end
+  f.pct:Show()
+end
+
 local Render
 function V.Render(plate, state, unit)
   Render(plate, state, unit)
@@ -626,13 +646,13 @@ function Render(plate, state, unit)
   end
   local dps = state and state.dps or false
   Style(f, dps, plate)
-  local st = Sets(dps)
+  local st, col = Sets(dps)
   local what = state and state.kind or "none"
 
   f.aggro.holder:SetAlpha(1); f.unstable.holder:SetAlpha(1); f.nothreat.holder:SetAlpha(1)
 
-  if what == "none" then HideAll(f); return end
-  f.pct:Hide()
+  if what == "none" or what == "unknown" then HideAll(f); return end
+  ShowPercent(f, state, col)
   ShowFlash(f.unstable, false)
 
   if what == "hidden" then
@@ -650,8 +670,9 @@ function Render(plate, state, unit)
     return
   end
 
-  -- readable: on you or not
+  -- readable: holding / safe, unstable (losing it / about to pull it), lost / on you
   ShowFlash(f.aggro, what == "secure" and st.aggro.show, st.aggro.flash)
+  ShowFlash(f.unstable, what == "unstable" and st.unstable.show, st.unstable.flash)
   ShowFlash(f.nothreat, what == "lost" and st.nothreat.show, st.nothreat.flash)
 end
 

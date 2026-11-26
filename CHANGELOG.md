@@ -1,5 +1,22 @@
 # Changelog
 
+## 5.1.0 (Milestone 2: classification and percentage)
+
+- Three states: secure (green), unstable (orange), lost (red with "!"), plus hidden, none and
+  unknown internally. Tank: orange when the game's lead state says someone is closing in (1-2)
+  or someone already has more threat (status 2). Not the tank: orange when you're above the tank
+  but not yet pulling it (status 1). Both from the threat *state*, which Forever keeps readable
+  in groups (`/hf debug` in a party: `secret: state=false values=true`).
+- Where threat % is readable (solo), orange also starts at "Warn at" (default 80% of pulling it):
+  your own % (not the tank), or the closest other's (the tank).
+- Threat % beside the nameplate (off by default), with its distance and box opacity. A hidden %
+  is handed to the game to draw (`SetFormattedText`), never read.
+- Each state now carries ownership (on the followed unit / someone else, inferred), the game's
+  status and lead, the % and a confidence ("values", "state", "hidden", "none").
+- Settings: the "Losing it / Close" glow row (show, flash, strength, interval, colour, per role),
+  a third preview button, the % options and "Warn at".
+- `/hf scan` and `/hf debug` show each state's confidence.
+
 ## 5.0.2 (Milestone 1: audit and fixes)
 
 - Fixed: "Whose aggro: My pet" with no pet out showed your own aggro instead of nothing.

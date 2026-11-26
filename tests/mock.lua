@@ -1,12 +1,15 @@
 -- A mock of the game API, just enough for Holdfast's files to load and run (tests/run_tests.py).
 -- Hidden ("secret") values are tables marked secret; the real client's rules are stricter
 -- (it errors on comparing or testing one), so these tests can't prove a hidden value is never read.
-MOCK = { threat = {}, hidden = false, inGroup = false, role = "NONE", pet = false, petDead = false,
+-- MOCK.hidden: the game hides threat state and values (both); MOCK.hiddenValues: values only
+-- (isTanking, %), the state (0-3 steps) readable - as seen in a party on Forever.
+MOCK = { threat = {}, hidden = false, hiddenValues = false, inGroup = false, role = "NONE", pet = false, petDead = false,
   euiShown = false, registered = {}, timers = {}, hooks = 0, hookFns = {} }
 
 function MOCK.Secret(v) return { secret = true, v = v } end
 issecretvalue = function(v) return type(v) == "table" and v.secret == true end
-local function sec(v) if MOCK.hidden then return MOCK.Secret(v) end return v end
+local function sec(v) if MOCK.hidden or MOCK.hiddenValues then return MOCK.Secret(v) end return v end
+local function secState(v) if MOCK.hidden then return MOCK.Secret(v) end return v end
 
 -- frames ----------------------------------------------------------------------------------
 local frames = {}
@@ -43,6 +46,10 @@ MOCK.methods = {
   GetValue = function() return 1 end, HasFocus = function() return false end, GetChecked = function(s) return s._checked end,
   GetEffectiveScale = function() return 1 end, IsForbidden = function() return false end,
   NumLines = function() return 0 end,
+  SetFormattedText = function(s, fmt, v)
+    if issecretvalue(v) then s._text = "<game>" else s._text = string.format(fmt, v) end
+  end,
+  SetTextColor = function(s, r, g, b) s._color = { r, g, b } end,
 }
 CreateFrame = function() return obj() end
 CreateFont = function() return obj() end
@@ -86,7 +93,11 @@ UnitDetailedThreatSituation = function(who)
 end
 UnitThreatSituation = function(who)
   local t = MOCK.threat[who]; if not t then return nil end
-  return sec(t.status)
+  return secState(t.status)
+end
+UnitThreatLeadSituation = function(who)
+  local t = MOCK.threat[who]; if not t or t.lead == nil then return nil end
+  return secState(t.lead)
 end
 GetThreatStatusColor = function() return 1, 0, 0 end
 
@@ -129,4 +140,9 @@ function MOCK.Look()
   local st = NS.State.Get("nameplate1")
   local g = MOCK.Glows()
   return (st and st.kind or "?") .. (g ~= "" and (" " .. g) or "")
+end
+-- the % beside the plate: its text ("<game>": a hidden % the game draws), or "" when not shown
+function MOCK.Pct()
+  local f = NS.Renderer.Indicator(MOCK.plate)
+  return (f and f.pct._shown and f.pctBox._shown) and f.pct._text or ""
 end

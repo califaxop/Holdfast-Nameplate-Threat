@@ -19,12 +19,12 @@ but can't compare it, test it or do arithmetic on it. `issecretvalue(v)` says wh
 
 | API | Signature (docs) | Returns | Secret when | Holdfast uses it for | Status |
 |---|---|---|---|---|---|
-| `UnitDetailedThreatSituation` | `(unit, mobUnit)` | `isTanking, status, scaledPercentage, rawPercentage, rawThreat` (docs: not nilable; in practice nothing when the unit isn't on the list) | threat **values** restricted (`SecretWhenUnitThreatValuesRestricted`) | `isTanking` only (on the followed unit or not) | **Verified in game:** all hidden in a party in combat; readable solo |
-| `UnitThreatSituation` | `(unit [, mobUnit])` | `status` 0–3, or nil when not on the list | threat **state** restricted (`SecretWhenUnitThreatStateRestricted`) — a separate restriction | Engagement: is anyone of yours on the list (non-nil) | Docs. In a party: **not measured** (`/hf debug` shows `status=`) |
-| `UnitThreatLeadSituation` | `(unit, mobUnit)` | 0–3: how far the unit leads the second on threat (always 3 if not first); nil if no mob | threat state restricted | Not used (diagnostics only) | Docs. Blizzard's nameplates use it for tanks. Not measured |
-| `UnitThreatPercentageOfLead` | `(unit, mobUnit)` | number or nil | threat values restricted | Not used (diagnostics only) | Docs. Not measured |
-| `C_Secrets.ShouldUnitThreatStateBeSecret` | `(unit [, mobUnit])` | bool | never | Not used (diagnostics only) | Docs. Not measured |
-| `C_Secrets.ShouldUnitThreatValuesBeSecret` | `(unit, mobUnit)` | bool | never | Not used (diagnostics only) | Docs. Not measured |
+| `UnitDetailedThreatSituation` | `(unit, mobUnit)` | `isTanking, status, scaledPercentage, rawPercentage, rawThreat` (docs: not nilable; in practice nothing when the unit isn't on the list) | threat **values** restricted (`SecretWhenUnitThreatValuesRestricted`) | Its hidden `isTanking` switches the glows when even the state is hidden; its scaled % is the % (readable: compared with "Warn at"; hidden: drawn by the game) | **Verified in game:** isTanking and % hidden in a party in combat (5.0.2); readable solo |
+| `UnitThreatSituation` | `(unit [, mobUnit])` | `status` 0–3, or nil when not on the list | threat **state** restricted (`SecretWhenUnitThreatStateRestricted`) — a separate restriction | Engagement (non-nil); on the followed unit (2–3); not the tank: about to pull (1); tank: someone has more (2) | **Verified in game:** readable in a party in combat (`status=0`, `status=3`, 5.0.2) |
+| `UnitThreatLeadSituation` | `(unit, mobUnit)` | 0–3: how far the unit leads the second on threat (always 3 if not first); nil if no mob | threat state restricted | Tank: someone closing in (1–2) | **Verified in game:** readable in a party in combat (`lead=3`, `lead=0`, 5.0.2). Blizzard's nameplates use it for tanks |
+| `UnitThreatPercentageOfLead` | `(unit, mobUnit)` | number or nil | threat values restricted | Diagnostics only | **Verified in game:** hidden in a party (5.0.2) |
+| `C_Secrets.ShouldUnitThreatStateBeSecret` | `(unit [, mobUnit])` | bool | never | Diagnostics only | **Verified in game:** false in a party (5.0.2) |
+| `C_Secrets.ShouldUnitThreatValuesBeSecret` | `(unit, mobUnit)` | bool | never | Diagnostics only | **Verified in game:** true in a party (5.0.2) |
 | `GetThreatStatusColor` | `(status)` | r, g, b | — | `/hf tank` probe only | Docs |
 | `C_CurveUtil` curves, `Curve:Evaluate` | — | — | — | Not used | **Verified in game:** turning a hidden value into a glow through curves was refused for addons (AggroGlow 3.6) |
 | `C_TooltipInfo.GetUnit` | `(unit [, hideStatus])` | tooltip data | lines may be hidden | `/hf tip` probe only | **Verified in game:** no readable "% Threat" line in a party (AggroGlow 3.8) |
@@ -47,6 +47,7 @@ when the unit would pull. Milestone 2 must check this in game before relying on 
 | `issecretvalue` | `(value) -> bool` | Holdfast wraps it as `ns.isSecret`; `ns.Readable(v)` = not nil and not secret. Falls back to "never secret" on a client without it | Docs; used in game since 3.x |
 | `Frame:SetAlphaFromBoolean` | `(value, alphaIfTrue = 1, alphaIfFalse = 0)` | Accepts a secret boolean from addons (`SecretArguments = AllowedWhenTainted`). How hidden `isTanking` drives the glows | **Verified in game** (the glows switch in party combat) |
 | `Region:SetVertexColorFromBoolean` | `(value, colorIfTrue, colorIfFalse)` | Accepts a secret boolean | Docs; not used yet |
+| `FontString:SetFormattedText` / `SetText` | `(format, ...)` / `(text)` | Accept secret arguments from addons (`AllowedWhenTainted`); the game draws the text. How a hidden threat % is shown | Docs; **not yet seen in game** (5.1.0, Milestone 2 → 3 step 5) |
 
 ## Units and groups
 

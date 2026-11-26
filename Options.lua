@@ -66,12 +66,14 @@ end
 -- Panel
 ---------------------------------------------------------------------------
 local STATES = {
-  { "aggro",    "Holding",       "It's attacking you (or your pet, when it tanks)." },
-  { "nothreat", "Lost",          "It's attacking someone else." },
+  { "aggro",    "Holding",   "It's attacking you (or your pet, when it tanks), and nobody is close to taking it." },
+  { "unstable", "Losing it", "It's attacking you (or your pet), but someone is close to taking it, or already has more threat." },
+  { "nothreat", "Lost",      "It's attacking someone else." },
 }
--- the same two glows when you're not the tank
+-- the same three glows when you're not the tank
 local STATES_DPS = {
-  { "aggro",    "Safe",    "It's attacking someone else." },
+  { "aggro",    "Safe",    "It's attacking someone else, and you're well below pulling it." },
+  { "unstable", "Close",   "It's attacking someone else, but you're close to pulling it." },
   { "nothreat", "On you",  "You pulled it: it's attacking you." },
 }
 local editSet = "tank" -- which settings the Glows table edits: "tank" or "dps"
@@ -97,7 +99,7 @@ local function BuildPanel(panel)
   at(UI.Text(panel, "line", "My role"), 26, -140)
   track(at(UI.Selector(panel, 300, { { "auto", "Auto: my group-finder role" }, { "tank", "Tank" }, { "dps", "Not the tank (damage / healer)" } },
     S("role"), Changed, "Auto uses the role you picked in the group finder. With no role set (solo, or a group without roles) you're treated as when solo: your pet when it's out, else you as the tank."), 120, -136))
-  local n2 = at(UI.Text(panel, "note", "Tank / solo: green while it's on you (or your pet), red with a \"!\" when it's on someone else. Not the tank: green while it's on someone else, red with a \"!\" once it's on you."), 26, -164)
+  local n2 = at(UI.Text(panel, "note", "Green: holding / safe. Orange: someone is close to taking it / you're close to pulling it. Red with a \"!\": lost / it's on you."), 26, -164)
   n2:SetWidth(W_)
 
   -- Glows ------------------------------------------------------------------
@@ -178,19 +180,40 @@ local function BuildPanel(panel)
   -- Display ----------------------------------------------------------------
   y = y - 50
   at(UI.Section(panel, "Display", W_), 26, y); y = y - 32
-  track(at(UI.Check(panel, "Only in a party or raid (or when my pet tanks)", S("onlyInGroup"), W_, Changed), 26, y))
+  track(at(UI.Check(panel, "Only in a party or raid (or when my pet tanks)", S("onlyInGroup"), W_, Changed), 26, y)); y = y - 24
+  -- the threat %
+  local pctOn, pctDist, pctBg
+  pctOn = track(at(UI.Check(panel, "Threat % beside the nameplate", S("showPercent"), W_, function()
+    Changed(); pctOn.Refresh()
+  end), 26, y))
+  pctDist = track(at(UI.Slider(panel, "% distance", 150, 0, 40, 1, S("percentGap"),
+    function(v) return v .. " px" end, Changed, 1), 50, y - 26))
+  pctBg = track(at(UI.Slider(panel, "% box opacity", 150, 0, 1, 0.05, S("percentBgAlpha"), pctFmt, Changed), 230, y - 26))
+  local pr = pctOn.Refresh
+  pctOn.Refresh = function()
+    pr(); pctDist.Refresh(); pctBg.Refresh()
+    pctDist:SetAlpha(ns.db.showPercent and 1 or 0.4); pctBg:SetAlpha(ns.db.showPercent and 1 or 0.4)
+  end
+  local pn = at(UI.Text(panel, "note", "Not the tank: your threat, as a % of what pulls it. The tank: the closest other's. In groups the game hides the number from addons; Holdfast lets the game draw it."), 50, y - 66)
+  pn:SetWidth(W_ - 24)
+  y = y - 104
+  track(at(UI.Slider(panel, "Warn at (orange from this % of pulling it)", 300, 50, 100, 5, S("warnAt"),
+    function(v) return v .. "%" end, Changed, 1), 26, y))
+  local wn = at(UI.Text(panel, "note", "Used where the game lets addons read threat % (mostly solo). In groups, orange follows the game's own \"closing in\" and \"about to pull\" states."), 26, y - 40)
+  wn:SetWidth(W_)
+  y = y - 76
   local iconDist
   local icon
   icon = track(at(UI.Check(panel, "\"!\" with the red glow: it's on you (as the tank: you lost it)", S("showIcon"), W_, function()
     Changed(); icon.Refresh()
-  end), 26, y - 24))
+  end), 26, y))
   iconDist = track(at(UI.Slider(panel, "\"!\" distance", 300, 0, 40, 1, S("iconOffsetX"),
-    function(v) return v .. " px" end, Changed, 1), 50, y - 50))
+    function(v) return v .. " px" end, Changed, 1), 50, y - 26))
   local ir = icon.Refresh
   icon.Refresh = function()
     ir(); iconDist.Refresh(); iconDist:SetAlpha(ns.db.showIcon and 1 or 0.4)
   end
-  local rep = track(at(UI.Check(panel, "Replace the game's aggro highlight (its flare above the bar)", S("replaceGameHighlight"), W_, Changed), 26, y - 94))
+  local rep = track(at(UI.Check(panel, "Replace the game's aggro highlight (its flare above the bar)", S("replaceGameHighlight"), W_, Changed), 26, y - 70))
   rep:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Replace the game's aggro highlight", 1, 1, 1)
@@ -200,10 +223,10 @@ local function BuildPanel(panel)
   rep:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
   -- Preview ----------------------------------------------------------------
-  y = y - 130
+  y = y - 106
   at(UI.Section(panel, "Preview on your target", W_), 26, y); y = y - 32
   local buttons = {}
-  local MODES = { { "secure", "Holding / safe" }, { "lost", "Lost / on you" } }
+  local MODES = { { "secure", "Holding / safe" }, { "unstable", "Losing it / close" }, { "lost", "Lost / on you" } }
   local function SetPreview(mode)
     ns.preview = (ns.preview ~= mode) and mode or nil
     for i, m in ipairs(MODES) do buttons[i].SetLabel(ns.preview == m[1] and "Stop" or m[2]) end

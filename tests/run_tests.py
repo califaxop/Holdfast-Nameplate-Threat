@@ -86,6 +86,75 @@ def _(L, ns):
       assert(MOCK.Look() == "none", "My pet, no pet out: " .. MOCK.Look())
     ''')
 
+@test("M2 tank, in a party (state readable, values hidden): holding / losing it / lost from the game's states")
+def _(L, ns):
+    lua(L, '''
+      NS.db.role = "tank"; NS.db.tank = "me"; MOCK.inGroup = true; MOCK.hiddenValues = true
+      MOCK.threat.player = { tanking = true, status = 3, lead = 0 }
+      assert(MOCK.Look() == "secure aggro", MOCK.Look())
+      local st = NS.State.Get("nameplate1")
+      assert(st.confidence == "state" and st.ownership == "followed" and st.lead == 0, st.confidence)
+      MOCK.threat.player.lead = 2; assert(MOCK.Look() == "unstable unstable", "someone closing in: " .. MOCK.Look())
+      MOCK.threat.player = { tanking = true, status = 2, lead = 3 }; assert(MOCK.Look() == "unstable unstable", "someone has more: " .. MOCK.Look())
+      MOCK.threat.player = { tanking = false, status = 0, lead = 3 }; MOCK.threat.party1 = { tanking = true, status = 3 }
+      assert(MOCK.Look() == "lost nothreat!", MOCK.Look())
+      assert(NS.State.Get("nameplate1").ownership == "other")
+      MOCK.threat.player = nil; assert(MOCK.Look() == "lost nothreat!", "not on its list, on the group: " .. MOCK.Look())
+    ''')
+
+@test("M2 not the tank, in a party: safe / close (status 1) / on you")
+def _(L, ns):
+    lua(L, '''
+      NS.db.role = "dps"; MOCK.inGroup = true; MOCK.hiddenValues = true
+      MOCK.threat.party1 = { tanking = true, status = 3 }
+      MOCK.threat.player = { tanking = false, status = 0, pct = 85 }
+      assert(MOCK.Look() == "secure aggro", "the % is hidden, so it can't warn from it: " .. MOCK.Look())
+      MOCK.threat.player.status = 1; assert(MOCK.Look() == "unstable unstable", MOCK.Look())
+      MOCK.threat.player = { tanking = true, status = 3 }; assert(MOCK.Look() == "lost nothreat!", MOCK.Look())
+      MOCK.threat.player = nil; assert(MOCK.Look() == "secure aggro", "not on its list: safe: " .. MOCK.Look())
+    ''')
+
+@test("M2 solo (values readable): Warn at, for you and for anyone close to taking it from you")
+def _(L, ns):
+    lua(L, '''
+      NS.db.role = "dps"; NS.db.warnAt = 80
+      MOCK.threat.player = { tanking = false, status = 0, pct = 85 }
+      assert(MOCK.Look() == "unstable unstable", MOCK.Look())
+      assert(NS.State.Get("nameplate1").confidence == "values")
+      MOCK.threat.player.pct = 50; assert(MOCK.Look() == "secure aggro", MOCK.Look())
+      NS.db.warnAt = 90; MOCK.threat.player.pct = 85; assert(MOCK.Look() == "secure aggro", MOCK.Look())
+      NS.db.role = "tank"; NS.db.warnAt = 80; MOCK.inGroup = true
+      MOCK.threat.player = { tanking = true, status = 3, lead = 0, pct = 100 }
+      MOCK.threat.party1 = { tanking = false, status = 1, pct = 92 }
+      assert(MOCK.Look() == "unstable unstable", MOCK.Look())
+      assert(NS.State.Get("nameplate1").percentage == 92)
+    ''')
+
+@test("M2 the %: off by default; readable shown capped; hidden handed to the game; in the state's colour")
+def _(L, ns):
+    lua(L, '''
+      NS.db.role = "dps"; MOCK.threat.player = { tanking = false, status = 1, pct = 93.6 }
+      MOCK.Look(); assert(MOCK.Pct() == "", "off by default")
+      NS.db.showPercent = true; MOCK.Look(); assert(MOCK.Pct() == "94%", MOCK.Pct())
+      local f = NS.Renderer.Indicator(MOCK.plate)
+      assert(f.pct._color[1] == NS.db.colorsDps.unstable[1], "orange")
+      MOCK.threat.player = { tanking = true, status = 3, pct = 130 }; MOCK.Look(); assert(MOCK.Pct() == "100%", MOCK.Pct())
+      MOCK.inGroup = true; MOCK.hiddenValues = true; MOCK.threat.player = { tanking = false, status = 0, pct = 40 }
+      MOCK.Look(); assert(MOCK.Pct() == "<game>", "hidden: drawn by the game: " .. MOCK.Pct())
+      MOCK.hidden = true; MOCK.Look(); assert(MOCK.Pct() == "<game>", "all hidden: still drawn by the game")
+      NS.db.role = "tank"; MOCK.hidden = false; MOCK.threat.player = { tanking = true, status = 3, lead = 0 }
+      MOCK.Look(); assert(MOCK.Pct() == "", "tank in a party: others' % can't be compared: none")
+    ''')
+
+@test("M2 preview: the unstable look, with a sample %")
+def _(L, ns):
+    lua(L, '''
+      UnitIsUnit = function() return true end
+      NS.db.showPercent = true; NS.preview = "unstable"
+      assert(MOCK.Look():find("unstable$"), MOCK.Look())
+      assert(MOCK.Pct() == "90%", MOCK.Pct())
+    ''')
+
 @test("renderer: a host switch (EllesmereUI plate shows late) reuses indicators, no new frames")
 def _(L, ns):
     lua(L, '''
@@ -176,7 +245,7 @@ def _(L, ns):
       MOCK.threat.player = { tanking = true, status = 3 }; MOCK.Look()
       PRINTS = {}; SlashCmdList.HOLDFAST("debug")
       local all = table.concat(PRINTS, "\\n")
-      assert(all:find("on you=true status=3 lead=n/a pct=50 ofLead=n/a"), all)
+      assert(all:find("on you=true status=3 lead=nil pct=50 ofLead=n/a"), all)
       MOCK.hidden = true; UnitThreatLeadSituation = function() error("nope") end
       C_Secrets = { ShouldUnitThreatStateBeSecret = function() return false end, ShouldUnitThreatValuesBeSecret = function() return true end }
       PRINTS = {}; SlashCmdList.HOLDFAST("scan")
