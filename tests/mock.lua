@@ -67,8 +67,18 @@ MOCK.plate = obj(); MOCK.plate.namePlateUnitToken = "nameplate1"
 local uf = obj(); MOCK.plate.UnitFrame = uf
 uf.healthBar = obj(); uf.aggroHighlightBase = obj(); uf.aggroHighlightAdditive = obj()
 uf.UpdateAggroHighlight = function() end
-C_NamePlate = { GetNamePlateForUnit = function(u) if u == "nameplate1" then return MOCK.plate end end,
-  GetNamePlates = function() return { MOCK.plate } end }
+MOCK.plates = { nameplate1 = MOCK.plate }
+C_NamePlate = { GetNamePlateForUnit = function(u) return MOCK.plates[u] end,
+  GetNamePlates = function() local t = {} for _, p in pairs(MOCK.plates) do t[#t + 1] = p end return t end }
+-- another enemy's nameplate (benchmarks): a game plate with its unit frame, bar and flare
+function MOCK.AddPlate(i)
+  local p = obj(); p.namePlateUnitToken = "nameplate" .. i
+  local u = obj(); p.UnitFrame = u
+  u.healthBar = obj(); u.aggroHighlightBase = obj(); u.aggroHighlightAdditive = obj()
+  u.UpdateAggroHighlight = function() end
+  MOCK.plates["nameplate" .. i] = p
+  return p
+end
 -- EllesmereUI's plate for the same unit (drawn only while MOCK.euiShown)
 local ep = obj(); ep.health = obj()
 ep.IsShown = function() return MOCK.euiShown end
@@ -87,7 +97,7 @@ IsInRaid = function() return MOCK.raid or false end
 GetNumSubgroupMembers = function() return MOCK.members or 1 end
 GetNumGroupMembers = function() return (MOCK.members or 1) + 1 end
 UnitGroupRolesAssigned = function(u) if u == "player" then return MOCK.role end return (MOCK.roles or {})[u] or "NONE" end
-InCombatLockdown = function() return false end
+InCombatLockdown = function() return MOCK.combat or false end
 UnitDetailedThreatSituation = function(who)
   local t = MOCK.threat[who]; if not t then return nil end
   return sec(t.tanking), sec(t.status), sec(t.pct or 50)
@@ -103,10 +113,17 @@ end
 GetThreatStatusColor = function() return 1, 0, 0 end
 
 -- the rest --------------------------------------------------------------------------------
-C_Timer = { NewTicker = function() end, After = function(_, fn) MOCK.timers[#MOCK.timers + 1] = fn end }
+MOCK.tickers = {}
+C_Timer = { NewTicker = function(sec, fn)
+    local t = { sec = sec, fn = fn, Cancel = function(self) self.cancelled = true end }
+    MOCK.tickers[#MOCK.tickers + 1] = t; return t
+  end, After = function(_, fn) MOCK.timers[#MOCK.timers + 1] = fn end }
+-- change a setting the way the settings window does (it bumps ns.lookGen: every plate restyles)
+function MOCK.Set(key, value) NS.db[key] = value; NS.lookGen = (NS.lookGen or 0) + 1 end
 -- join or leave a group (the game sends GROUP_ROSTER_UPDATE, which refreshes Holdfast's roster)
 function MOCK.Group(on) MOCK.inGroup = on; MOCK.Fire("GROUP_ROSTER_UPDATE"); MOCK.RunTimers() end
 function MOCK.RunTimers() local t = MOCK.timers; MOCK.timers = {}; for _, fn in ipairs(t) do fn() end end
+debugprofilestop = function() return os.clock() * 1000 end
 format = string.format; tinsert = table.insert; strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 UISpecialFrames = {}; SlashCmdList = {}

@@ -4,6 +4,7 @@ local _, ns = ...
 local UI = ns.UI
 
 local function Changed()
+  ns.lookGen = (ns.lookGen or 0) + 1 -- every indicator restyles once
   if ns.UpdateAll then ns.UpdateAll() end
   if ns.RefreshInUse then ns.RefreshInUse() end
 end

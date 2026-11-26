@@ -17,34 +17,17 @@ local current = {}      -- plate -> the indicator shown on it now
 local pool = setmetatable({}, { __mode = "k" }) -- host bar -> { [glow style] = indicator }
 local TEXT_LEVEL = 30   -- % and "!" sit this many frame levels above the health bar (over debuff icons)
 
-local function HealthBarOf(plate)
-  local uf = plate.UnitFrame
-  if not uf then return plate end
-  return uf.healthBar or (uf.HealthBarsContainer and uf.HealthBarsContainer.healthBar) or uf
-end
-
--- Where to draw. FlareUI's and EllesmereUI's nameplate modules draw their own plates on top of the
--- game's and make its unit frame invisible, so with them on, Holdfast draws on theirs:
---   EllesmereUI: its plate for the unit (EllesmereNameplates_NS.plates[unit]), health bar .health
---   FlareUI:     its parts of the game plate (FlareUI.Nameplates.PartsFor(plate)), bar box .box
--- Returns the parent frame, the bar to frame, which kind ("blizzard" | "eui" | "flare") and its plate.
+-- Where to draw: the first nameplate adapter (Adapters.lua) that finds a host for the plate -
+-- EllesmereUI's plate, FlareUI's parts, the game's unit frame, or the plate itself.
+-- Returns the parent frame, the bar to frame, the adapter and its parts.
 local function Host(plate, unit)
-  local EN = _G.EllesmereNameplates_NS
-  local ep = type(EN) == "table" and type(EN.plates) == "table" and unit and EN.plates[unit]
-  if type(ep) == "table" and ep.health and ep.IsShown and ep:IsShown() then return ep, ep.health, "eui", ep end
-  local NP = type(FlareUI) == "table" and FlareUI.Nameplates
-  if type(NP) == "table" and NP.PartsFor then
-    local ok, fp = pcall(NP.PartsFor, plate)
-    if ok and type(fp) == "table" and (fp.box or fp.health) then
-      return fp.root or fp.holder or fp.box, fp.box or fp.health, "flare", fp
-    end
-  end
-  return plate.UnitFrame or plate, HealthBarOf(plate), "blizzard"
+  local ad, parent, bar, src = ns.Adapters.Find(plate, unit)
+  return parent, bar, ad, src
 end
 
--- the font the plate shows its level in: theirs on FlareUI / EllesmereUI plates, else the game's
-local function PlateFont(fs, kind, src)
-  local from = (kind == "eui" and src and (src.levelText or src.hpText)) or (kind == "flare" and src and (src.level or src.name))
+-- the font the plate shows its level in: the adapter's (FlareUI's / EllesmereUI's), else the game's
+local function PlateFont(fs, ad, src)
+  local from = ad and ad.Font and ad.Font(src)
   if from and from.GetFont then
     local ok, path, size, flags = pcall(from.GetFont, from)
     if ok and type(path) == "string" and not isSecret(path) and type(size) == "number" and not isSecret(size) then
@@ -119,31 +102,51 @@ local function Around(d, w, h, m)
   return -m, h + m - (d - W), false
 end
 
+-- The animation manager: one OnUpdate for every moving glow (pixel lines, autocast sparkles) that
+-- is showing, instead of one per glow. Glows join while shown and leave when hidden; with none
+-- showing, the driver frame is hidden and costs nothing.
+local Anim = { active = {}, n = 0, clock = 0, ticks = 0 }
+V.Anim = Anim
+local driver = CreateFrame("Frame")
+driver:Hide()
+driver:SetScript("OnUpdate", function(_, el)
+  Anim.clock = Anim.clock + el
+  Anim.ticks = Anim.ticks + 1
+  for g in pairs(Anim.active) do g.Tick(Anim.clock) end
+end)
+function Anim.Set(g, on)
+  if not g.Tick then return end
+  if on and not Anim.active[g] then
+    Anim.active[g] = true; Anim.n = Anim.n + 1
+  elseif not on and Anim.active[g] then
+    Anim.active[g] = nil; Anim.n = Anim.n - 1
+  end
+  driver:SetShown(Anim.n > 0)
+end
+
 -- Pixel lines: short bars running round the plate (as in EllesmereUI's and other UIs' "pixel glow").
 local function PixelGlow(holder, bar)
   local g = { textures = {} }
   local N, TH, PERIOD = 8, 2, 4
-  local drv = CreateFrame("Frame", nil, holder)
   for i = 1, N do
     local t = holder:CreateTexture(nil, "OVERLAY", nil, 6)
     t:SetTexture("Interface\\Buttons\\WHITE8X8")
     g.textures[i] = t
   end
-  local clock = 0
-  drv:SetScript("OnUpdate", function(_, el)
-    clock = (clock + el) % PERIOD
+  function g.Tick(clock)
     local w, h = BarSize(bar)
     if not w then for _, t in ipairs(g.textures) do t:Hide() end return end
     local per = 2 * (w + h + 4 * 2)
     local len = math.max(4, math.min(w, h, per / N * 0.45))
+    local phase = (clock % PERIOD) / PERIOD * per
     for i, t in ipairs(g.textures) do
-      local x, y, across = Around(clock / PERIOD * per + (i - 1) * per / N, w, h, 2)
+      local x, y, across = Around(phase + (i - 1) * per / N, w, h, 2)
       t:ClearAllPoints()
       t:SetPoint("CENTER", bar, "TOPLEFT", x, -y)
       if across then t:SetSize(len, TH) else t:SetSize(TH, math.min(len, h + 4)) end
       t:Show()
     end
-  end)
+  end
   return g
 end
 
@@ -151,29 +154,27 @@ end
 local function AutocastGlow(holder, bar)
   local g = { textures = {} }
   local GROUPS, SIZES, PERIOD = 4, { 7, 6, 5, 4 }, 6
-  local drv = CreateFrame("Frame", nil, holder)
   for i = 1, GROUPS * #SIZES do
     local t = holder:CreateTexture(nil, "OVERLAY", nil, 7)
     t:SetTexture("Interface\\Cooldown\\star4")
     t:SetBlendMode("ADD")
     g.textures[i] = t
   end
-  local clock = 0
-  drv:SetScript("OnUpdate", function(_, el)
-    clock = (clock + el) % PERIOD
+  function g.Tick(clock)
     local w, h = BarSize(bar)
     if not w then for _, t in ipairs(g.textures) do t:Hide() end return end
     local per = 2 * (w + h + 4 * 1)
+    local phase = (clock % PERIOD) / PERIOD * per
     local k = 0
     for grp = 1, GROUPS do
       for j, size in ipairs(SIZES) do
         k = k + 1
         local t = g.textures[k]
-        local x, y = Around(clock / PERIOD * per + (grp - 1) * per / GROUPS - (j - 1) * 3, w, h, 1)
+        local x, y = Around(phase + (grp - 1) * per / GROUPS - (j - 1) * 3, w, h, 1)
         t:ClearAllPoints(); t:SetPoint("CENTER", bar, "TOPLEFT", x, -y); t:SetSize(size, size); t:Show()
       end
     end
-  end)
+  end
   return g
 end
 
@@ -236,7 +237,7 @@ local LEVEL_ATLAS = "ui-hud-nameplates-levelindicator"
 local LEVEL_SELECTED_ATLAS = "ui-hud-nameplates-levelindicator-rectangle-selected"
 local BOX_BORDER = { 0.86, 0.66, 0.36 } -- the fallback border's bronze (on grey art, so a bit brighter)
 local boxes = setmetatable({}, { __mode = "k" }) -- [box frame] = { art, selected, hasLevelArt, key }
-local function StyleBox(b, kind, src)
+local function StyleBox(b, ad, src)
   local a = ns.db.percentBgAlpha or 0.8
   local x = boxes[b]
   if not x then
@@ -250,45 +251,12 @@ local function StyleBox(b, kind, src)
     if x.selected then x.selected:Hide() end
     boxes[b] = x
   end
-  local key = tostring(x.hasLevelArt) .. a .. (kind or "")
+  local key = tostring(x.hasLevelArt) .. a .. (ad and ad.kind or "")
   if x.key == key then return end
   x.key = key
   if x.border then x.border:Hide() end
-  if kind == "eui" then
-    -- EllesmereUI: a flat dark box with a 1 px black edge, like its plates
-    x.art:Hide(); if x.selected then x.selected:Hide() end
-    b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
-      insets = { left = 1, right = 1, top = 1, bottom = 1 } })
-    b:SetBackdropColor(0, 0, 0, a)
-    b:SetBackdropBorderColor(0, 0, 0, 1)
-    return
-  end
-  if kind == "flare" then
-    -- FlareUI: the same backdrop and border as its plate's level box
-    x.art:Hide(); if x.selected then x.selected:Hide() end
-    local lf, lb = src and src.levelFrame, src and src.levelBorder
-    local okB, bd = false
-    if lf and lf.GetBackdrop then okB, bd = pcall(lf.GetBackdrop, lf) end
-    if okB and type(bd) == "table" then
-      b:SetBackdrop(bd)
-      local ok2, r, g, bb = pcall(lf.GetBackdropColor, lf)
-      b:SetBackdropColor(ok2 and r or 0, ok2 and g or 0, ok2 and bb or 0, a)
-    else
-      b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" }); b:SetBackdropColor(0, 0, 0, a)
-    end
-    local okE, be = false
-    if lb and lb.GetBackdrop then okE, be = pcall(lb.GetBackdrop, lb) end
-    if okE and type(be) == "table" then
-      x.border = x.border or CreateFrame("Frame", nil, b, "BackdropTemplate")
-      x.border:ClearAllPoints()
-      x.border:SetAllPoints(b)
-      x.border:SetBackdrop(be)
-      local ok3, r, g, bb, ba = pcall(lb.GetBackdropBorderColor, lb)
-      if ok3 and r then x.border:SetBackdropBorderColor(r, g, bb, ba or 1) end
-      x.border:Show()
-    end
-    return
-  end
+  -- the adapter's own look (EllesmereUI's flat box, FlareUI's level box), else the game's level box
+  if ad and ad.Box and ad.Box(b, x, a, src) then return end
   if x.hasLevelArt then
     x.art:Show(); x.art:SetAlpha(a)
     b:SetBackdrop(nil)
@@ -341,12 +309,13 @@ local function MakeFlash(f, bar, kind)
   return { holder = holder, glow = glow, anim = anim, alpha = a, icon = icon }
 end
 
-local function Create(plate, parent, bar, kind, src)
+local function Create(plate, parent, bar, ad, src)
+  local kind = ad.kind
   -- on the plate's own unit frame (the bar's parent chain), so it moves and scales with the bar
   -- exactly; never anchored to the plate's base frame (FlareUI's / EllesmereUI's plate when they draw it)
   local f = CreateFrame("Frame", nil, parent)
   f:SetFrameLevel(bar:GetFrameLevel() + 2) -- just above the bar/border
-  f.kind, f.src = kind, src
+  f.kind, f.adapter, f.src = kind, ad, src
   f.uf, f.plate, f.outer = false, plate, false
   if kind == "blizzard" then f.uf = parent end -- (the game's plate: what sits left of its bar, see LeftOf)
 
@@ -361,7 +330,7 @@ local function Create(plate, parent, bar, kind, src)
   f.pctBox = CreateFrame("Frame", nil, f.top, "BackdropTemplate") -- under the level box
   f.pctBox:SetSize(30, 15)
   f.pct = f.pctBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  PlateFont(f.pct, kind, src) -- the level's font (FlareUI's / EllesmereUI's on their plates)
+  PlateFont(f.pct, ad, src) -- the level's font (FlareUI's / EllesmereUI's on their plates)
   f.pct:SetPoint("CENTER", 0, 0)
   f.bar = bar
 
@@ -547,10 +516,17 @@ local function Sets(dps)
   return db.states, db.colors
 end
 
+-- Settings that change the look bump ns.lookGen (Options), so each indicator is restyled once
+-- after a change (or when it's reused for a new enemy: V.Invalidate), not on every update.
+V.counters = { renders = 0, skipped = 0, styles = 0 }
 local function Style(f, dps, plate)
+  local key = (ns.lookGen or 0) .. (dps and "d" or "t")
+  if f.styleKey == key then return end
+  f.styleKey = key
+  V.counters.styles = V.counters.styles + 1
   WatchLeft(f)
   PlaceText(f, plate and QuestieIcon(plate))
-  StyleBox(f.pctBox, f.kind, f.src)
+  StyleBox(f.pctBox, f.adapter, f.src)
   local db = ns.db
   local st, col = Sets(dps)
   StyleFlash(f.aggro, col.aggro, st.aggro.alpha, st.aggro.speed or 0.5, false)
@@ -562,6 +538,7 @@ end
 -- on: the glow is visible; flashing: it pulses (else it stays steady)
 local function ShowFlash(fl, on, flashing)
   fl.holder:SetShown(on)
+  Anim.Set(fl.glow, on and true or false)
   local pulse = on and flashing
   if pulse and not fl.anim:IsPlaying() then fl.anim:Play()
   elseif not pulse and fl.anim:IsPlaying() then fl.anim:Stop() end
@@ -592,7 +569,7 @@ end
 
 local Render
 function V.Render(plate, state, unit)
-  Render(plate, state, unit)
+  if Render(plate, state, unit) then return end -- (unchanged)
   local f = plate and current[plate]
   if not f then return end
   -- the % box follows the %: shown with it, sized to it
@@ -605,7 +582,7 @@ function V.Render(plate, state, unit)
     f.pctBox:SetWidth(math.max(28, ((ok and type(w) == "number" and not isSecret(w)) and w or 20) + 10))
     -- the yellow outline while it's your target, like the level box
     local x = boxes[f.pctBox]
-    if x and x.selected and f.kind == "blizzard" then
+    if x and x.selected and f.kind == "blizzard" then -- (the game's level box has this outline)
       local okT, isT = pcall(UnitIsUnit, unit or "none", "target")
       x.selected:SetShown(okT and not isSecret(isT) and isT and true or false)
     end
@@ -613,41 +590,65 @@ function V.Render(plate, state, unit)
 end
 
 -- The indicator for this host bar in this glow style: reused if it was made before.
-local function Acquire(plate, parent, bar, kind, src, style)
+local function Acquire(plate, parent, bar, ad, src, style)
   local byStyle = pool[bar]
   if not byStyle then byStyle = {}; pool[bar] = byStyle end
   local f = byStyle[style]
   if not f then
-    f = Create(plate, parent, bar, kind, src)
+    f = Create(plate, parent, bar, ad, src)
     f.style = style
     byStyle[style] = f
   end
   -- a recycled FlareUI / EllesmereUI plate can move to another game plate: let go of the old one
   if f.plate ~= plate and current[f.plate] == f then current[f.plate] = nil end
-  f.plate, f.kind, f.src = plate, kind, src
-  f.uf = (kind == "blizzard") and parent or false
-  f.placedKey, f.iconKey = nil, nil
+  f.plate, f.kind, f.adapter, f.src = plate, ad.kind, ad, src
+  f.uf = (ad.kind == "blizzard") and parent or false
+  f.placedKey, f.iconKey, f.styleKey, f.renderKey = nil, nil, nil, nil
   return f
 end
 
 function Render(plate, state, unit)
   if not plate then return end
-  local parent, bar, kind, src = Host(plate, unit)
-  local style = GlowStyle(kind)
+  local parent, bar, ad, src = Host(plate, unit)
+  if not ad then return end
+  local style = GlowStyle(ad.kind)
   local f = current[plate]
-  if f and (f.bar ~= bar or f.kind ~= kind or f.style ~= style) then
+  if f and (f.bar ~= bar or f.adapter ~= ad or f.style ~= style) then
     -- the plate is drawn by another UI now (or no longer), or the glow style changed
     HideAll(f); f:Hide(); current[plate] = nil; f = nil
   end
-  if not f then f = Acquire(plate, parent, bar, kind, src, style); current[plate] = f end
+  if not f then f = Acquire(plate, parent, bar, ad, src, style); current[plate] = f end
   f:Show()
   if f.uf then
-    if ns.db.replaceGameHighlight then WatchGameFlare(f); HideGameFlare(f.uf) else RestoreGameFlare(f.uf) end
+    if ns.db.replaceGameHighlight then
+      WatchGameFlare(f)
+      if not flareHidden[f.uf] then HideGameFlare(f.uf) end -- (the hook hides it when the game shows it again)
+    else RestoreGameFlare(f.uf) end
   end
   local dps = state and state.dps or false
   Style(f, dps, plate)
   local st, col = Sets(dps)
   local what = state and state.kind or "none"
+
+  -- nothing changed since the last update (same state, same look, same target): nothing to redraw.
+  -- (A hidden answer can't be compared, so hidden states and hidden % are always passed on.)
+  -- (the % only counts while it's shown; a hidden % can't be compared, so its text is just handed
+  -- to the game again, which is cheap)
+  local pct = state and state.percentage
+  local showPct = ns.db.showPercent and pct ~= nil
+  local key = nil
+  if what ~= "hidden" then
+    local okT, isT = pcall(UnitIsUnit, unit or "none", "target")
+    key = what .. "|" .. (showPct and (isSecret(pct) and "hidden" or tostring(pct)) or "-") .. "|"
+      .. tostring(okT and not isSecret(isT) and isT) .. "|" .. f.styleKey
+  end
+  if key and f.renderKey == key then
+    if showPct and isSecret(pct) then ShowPercent(f, state, col) end
+    V.counters.skipped = V.counters.skipped + 1
+    return true
+  end
+  f.renderKey = key
+  V.counters.renders = V.counters.renders + 1
 
   f.aggro.holder:SetAlpha(1); f.unstable.holder:SetAlpha(1); f.nothreat.holder:SetAlpha(1)
 
@@ -678,23 +679,30 @@ end
 
 function V.Hide(plate)
   local f = plate and current[plate]
-  if f then HideAll(f) end
+  if f then HideAll(f); f.renderKey = nil end
+end
+
+-- the plate shows another enemy now (recycled): restyle and redraw it on its next update
+function V.Invalidate(plate)
+  local f = plate and current[plate]
+  if f then f.styleKey, f.renderKey = nil, nil end
 end
 
 -- the glow style changed: every plate picks its indicator in the new style on its next update
 -- (one made earlier in that style is reused)
 function V.Rebuild()
-  for plate, f in pairs(current) do HideAll(f); f:Hide(); current[plate] = nil end
+  for plate, f in pairs(current) do HideAll(f); f:Hide(); f.renderKey = nil; current[plate] = nil end
 end
 
 -- for diagnostics and tests: the indicator on a plate; indicators made so far, and the plates showing one
 function V.Indicator(plate) return current[plate] end
--- for diagnostics and tests: indicators made so far, and the plates showing one
+-- for diagnostics (/hf perf) and tests: indicators made so far, the plates showing one, and by
+-- which adapter
 function V.Counts()
-  local made, shown = 0, 0
+  local made, shown, kinds = 0, 0, {}
   for _, byStyle in pairs(pool) do for _ in pairs(byStyle) do made = made + 1 end end
-  for _ in pairs(current) do shown = shown + 1 end
-  return made, shown
+  for _, f in pairs(current) do shown = shown + 1; kinds[f.kind] = (kinds[f.kind] or 0) + 1 end
+  return made, shown, kinds
 end
 
 V.HasSecretSupport = function() return UIParent.SetAlphaFromBoolean ~= nil end

@@ -9,9 +9,13 @@ local MODE_TEXT = { pet = "your pet's aggro", both = "you and your pet holding i
 local ROSTER_EVENTS = { GROUP_ROSTER_UPDATE = true, PLAYER_ROLES_ASSIGNED = true, UNIT_PET = true }
 
 
+-- performance counters (/hf perf)
+local perf = { evaluations = 0, passes = 0, time = 0, checks = 0 }
+
 local function UpdateUnit(unit)
   local plate = R.Get(unit)
   if not plate then return end
+  perf.evaluations = perf.evaluations + 1
   local st = S.Update(unit)
   -- "Only show in a party or raid": solo, nothing glows (preview still works)
   -- (your pet tanking counts too: that's usually solo)
@@ -32,12 +36,35 @@ local function UpdateAll()
 end
 ns.UpdateAll = UpdateAll
 
--- events that can fire many times a frame in group combat: one update next frame covers them all
-local queued = false
-local function UpdateAllSoon()
+-- Updates are driven by the game's events. Those can fire many times a frame in group combat, so
+-- they're merged: on the next frame each enemy named is updated once, or every plate once when a
+-- change concerns them all (your role, your target, combat, the group, a pet...).
+local dirty, allDirty, queued = {}, false, false
+local function Flush()
+  queued = false
+  local t0 = debugprofilestop and debugprofilestop()
+  if allDirty then UpdateAll() else for unit in pairs(dirty) do UpdateUnit(unit) end end
+  wipe(dirty); allDirty = false
+  perf.passes = perf.passes + 1
+  if t0 then perf.time = perf.time + (debugprofilestop() - t0) end
+end
+local function Queue()
   if queued then return end
   queued = true
-  C_Timer.After(0, function() queued = false; UpdateAll() end)
+  C_Timer.After(0, Flush)
+end
+local function UpdateSoon(unit) dirty[unit] = true; Queue() end
+local function UpdateAllSoon() allDirty = true; Queue() end
+
+-- A safety net for a change no event reports: every plate once a second, only while you're in
+-- combat (out of combat nothing changes without an event).
+local net
+local function SafetyNet(on)
+  if on and not net then
+    net = C_Timer.NewTicker(1, function() perf.checks = perf.checks + 1; UpdateAllSoon() end)
+  elseif not on and net then
+    net:Cancel(); net = nil
+  end
 end
 
 -- Diagnostics: what the game's threat calls answer for one enemy, each as a value, nil, <hidden>,
@@ -105,14 +132,14 @@ ev:SetScript("OnEvent", function(_, event, unit)
       "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED", "UNIT_PET", "PLAYER_ROLES_ASSIGNED" }) do
       ev:RegisterEvent(e)
     end
-    C_Timer.NewTicker(0.25, UpdateAll) -- safety net for missed updates
+    SafetyNet(InCombatLockdown and InCombatLockdown()) -- (a /reload in combat)
     ns.Print("loaded. Type |cffffff00/hf|r for commands.")
   elseif event == "NAME_PLATE_UNIT_ADDED" then
-    R.Add(unit); UpdateUnit(unit)
+    V.Invalidate(R.Add(unit)); UpdateUnit(unit) -- (at once: a plate appearing shows its glow straight away)
   elseif event == "NAME_PLATE_UNIT_REMOVED" then
     V.Hide(R.Remove(unit)); S.Clear(unit)
   elseif event == "UNIT_THREAT_LIST_UPDATE" and unit and R.Get(unit) then
-    UpdateUnit(unit)
+    UpdateSoon(unit)
   -- (any other token - "target", "focus", "boss1"... - falls through to one batched update of
   -- every plate: the event names the enemy by only one of its tokens, not always its nameplate's)
   elseif event == "PLAYER_ENTERING_WORLD" then
@@ -120,6 +147,7 @@ ev:SetScript("OnEvent", function(_, event, unit)
   else
     -- the group, its roles or a pet changed (summoned, dismissed, died, replaced): look again
     if ROSTER_EVENTS[event] then S.RosterChanged() end
+    if event == "PLAYER_REGEN_DISABLED" then SafetyNet(true) elseif event == "PLAYER_REGEN_ENABLED" then SafetyNet(false) end
     UpdateAllSoon()
   end
 end)
@@ -132,7 +160,7 @@ local TOGGLES = { icon = "showIcon" }
 SLASH_HOLDFAST1 = "/hf"
 SLASH_HOLDFAST2 = "/holdfast"
 SlashCmdList.HOLDFAST = function(msg)
-  local cmd = (msg or ""):lower():match("^(%S*)")
+  local cmd, arg = (msg or ""):lower():match("^(%S*)%s*(.-)$")
   local db = ns.db
   if cmd == "" or cmd == "config" or cmd == "options" then
     local ok, e = pcall(ns.OpenOptions)
@@ -218,9 +246,31 @@ SlashCmdList.HOLDFAST = function(msg)
     if ns.debug then Scan() end
   elseif cmd == "scan" then
     Scan()
+  elseif cmd == "perf" then
+    local n = 0
+    for _ in R.Each() do n = n + 1 end
+    local made, shown, kinds = V.Counts()
+    local list = {}
+    for k, c in pairs(kinds) do list[#list + 1] = k .. " " .. c end
+    table.sort(list)
+    local c, A = V.counters, V.Anim
+    ns.Print(format("nameplates tracked %d | indicators made %d, showing %d (%s)", n, made, shown,
+      #list > 0 and table.concat(list, ", ") or "none"))
+    ns.Print(format("threat evaluations %d | redraws %d, unchanged %d | restyles %d", perf.evaluations, c.renders, c.skipped, c.styles))
+    ns.Print(format("update passes %d, average %.3f ms | moving glows animating %d, animation frames %d",
+      perf.passes, perf.passes > 0 and perf.time / perf.passes or 0, A.n, A.ticks))
+    ns.Print("safety check: " .. (net and format("every second in combat (%d so far)", perf.checks) or "off (out of combat)")
+      .. "  -  /hf perf reset to start counting again")
+    if arg == "reset" then
+      perf.evaluations, perf.passes, perf.time, perf.checks = 0, 0, 0, 0
+      c.renders, c.skipped, c.styles, A.ticks = 0, 0, 0, 0
+      ns.Print("counters reset")
+    end
+    return
   else
-    ns.Print("/hf (settings)  -  /hf icon | aggro  -  /hf debug  -  /hf scan  -  /hf tank")
+    ns.Print("/hf (settings)  -  /hf icon | aggro  -  /hf debug  -  /hf scan  -  /hf perf  -  /hf tank")
     return
   end
+  ns.lookGen = (ns.lookGen or 0) + 1 -- (a setting changed: every plate restyles)
   UpdateAll()
 end

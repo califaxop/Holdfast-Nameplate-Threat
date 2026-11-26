@@ -1,5 +1,23 @@
 # Changelog
 
+## 5.3.0 (Milestone 4: rendering and performance)
+
+- Event-driven: the 0.25 s ticker over every plate is gone. Threat-list updates are merged per
+  enemy per frame; changes for everyone (situation, combat, target, roster, roles, pets) are
+  merged into one pass per frame. A 1 s safety check runs only while you're in combat.
+- Each nameplate is restyled only after a setting change (or a new enemy on it), and redrawn
+  only when its state, shown %, target outline or style changes. A hidden % is passed to the
+  game again each update, without comparing it.
+- Animation manager: pixel-line and autocast glows share one `OnUpdate`, joined while shown;
+  with none showing it stops.
+- Nameplate adapters (Adapters.lua): EllesmereUI, FlareUI, the game's plate, and a generic
+  fallback; each validated before use, with the next one tried if it fails.
+- `/hf perf`: plates tracked, indicators by adapter, threat evaluations, redraws vs unchanged,
+  restyles, average update time, glows animating, safety check.
+- `/hf icon` and `/hf aggro` restyle the plates at once.
+- Offline: `tests/bench.py` (5.2.0 vs 5.3.0 on the mock: 3800 vs 140 redraws in 10 s with 20
+  plates).
+
 ## 5.2.0 (Milestone 3: who it's attacking, and pet tracking)
 
 - Ownership: each enemy's state says who it's attacking - you, your pet, a group tank, another

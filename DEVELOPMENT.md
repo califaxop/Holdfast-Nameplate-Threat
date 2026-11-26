@@ -11,14 +11,14 @@ isn't, and tracks the milestone plan. API facts and their verification status li
 |---|---|---|
 | 1 | Audit and stabilize the existing implementation | Done in 5.0.2, validated in game (step 5, the flare given back, still to see) |
 | 2 | Threat classification and percentage engine | Done in 5.1.0, validated in game (tank: all three states; not the tank: the hidden %). Orange as not the tank and "Warn at" solo still to see |
-| 3 | Multi-unit ownership and pet tracking | **Done in 5.2.0, waiting for in-game validation** |
-| 4 | Rendering and performance improvements | Not started |
+| 3 | Multi-unit ownership and pet tracking | Done in 5.2.0, validated in game (ownership in a party). "The group's tanks", "Me and my pet" still to see |
+| 4 | Rendering and performance improvements | **Done in 5.3.0, waiting for in-game validation** |
 | 5 | Notifications, overview and customization | Not started |
 | 6 | Diagnostics, validation and release preparation | Not started |
 
-## Architecture (as it actually runs, 5.2.0)
+## Architecture (as it actually runs, 5.3.0)
 
-Load order (Holdfast.toc): Core → UnitRegistry → ThreatState → Renderer → UI → Options → Engine.
+Load order (Holdfast.toc): Core → UnitRegistry → ThreatState → Adapters → Renderer → UI → Options → Engine.
 Every file shares the addon namespace `ns`.
 
 | File | Module | Does |
@@ -26,6 +26,7 @@ Every file shares the addon namespace `ns`.
 | Core.lua | `ns` | Defaults, saved variables (`HoldfastDB`, schema version 5) and their migrations, `ns.isSecret` / `ns.Readable`, printing |
 | UnitRegistry.lua | `ns.Registry` | Nameplate unit token → the game's plate frame (`Add`, `Remove`, `Get`, `Scan`, `Each`) |
 | ThreatState.lua | `ns.State` | Role and mode (whose aggro), evaluation of one enemy into a state table, last state per unit, a transition callback |
+| Adapters.lua | `ns.Adapters` | Nameplate adapters: EllesmereUI, FlareUI, the game's plate, a generic fallback. Each finds the host frame and bar for a plate (validated), and gives its font and its % box look |
 | Renderer.lua | `ns.Renderer` | Finds the host (EllesmereUI / FlareUI / the game's plate), builds and reuses indicator frames, glow styles, the "!" and % placement, hides the game's aggro flare |
 | UI.lua | `ns.UI` | The shared settings-window kit (also used by the other addons); FlareUI / EllesmereUI skins |
 | Options.lua | — | The settings window and the Esc > Options > AddOns entry |
@@ -34,14 +35,17 @@ Every file shares the addon namespace `ns`.
 ### Update flow
 
 1. `ADDON_LOADED` (Holdfast): load settings, scan plates, register the settings entry, register
-   the events below, start a 0.25 s ticker that updates every plate (a safety net).
-2. `NAME_PLATE_UNIT_ADDED` → `Registry.Add` → update that unit.
+   the events below. No polling out of combat.
+2. `NAME_PLATE_UNIT_ADDED` → `Registry.Add` → restyle and update that unit at once.
    `NAME_PLATE_UNIT_REMOVED` → hide its indicator, forget its state.
-   `UNIT_THREAT_LIST_UPDATE` for a nameplate token → update that unit; for any other token
-   (target, focus, boss…) → one batched update of every plate.
-   `PLAYER_ENTERING_WORLD` → rescan and update all.
+   `UNIT_THREAT_LIST_UPDATE` for a nameplate token → that unit, on the next frame (merged: a unit
+   named many times in a frame is updated once); for any other token (target, focus, boss…) →
+   every plate, next frame.
+   `PLAYER_ENTERING_WORLD` → refresh the roster, rescan and update all.
    Everything else (`UNIT_THREAT_SITUATION_UPDATE`, combat start / end, roster, target, pet,
-   roles) → one batched update of every plate on the next frame (`C_Timer.After(0)`).
+   roles) → every plate once, next frame (`C_Timer.After(0)`). Roster, role and pet events also
+   refresh the cached roster.
+   Combat start → a 1 s safety check (every plate) until combat ends.
 3. Updating a unit: `State.Update(unit)` → (the "only in a group" and preview overrides) →
    `Renderer.Render(plate, state, unit)`.
 
@@ -81,8 +85,9 @@ Every file shares the addon namespace `ns`.
 
 ### Rendering (Renderer.lua)
 
-- Host: EllesmereUI's plate for the unit when shown, else FlareUI's parts of the plate, else the
-  game's unit frame. Each gives a parent frame and a bar to frame.
+- Host: the first adapter (Adapters.lua) that finds one: EllesmereUI's plate for the unit when
+  shown, FlareUI's parts of the plate, the game's unit frame, or the plate itself. The adapter
+  also gives the % font and the % box look, so the renderer has no EllesmereUI / FlareUI code.
 - One indicator per host bar and glow style, made once and reused (frames can't be freed). Each
   has three glows (`aggro`, `unstable`, `nothreat`; each a holder frame, an inner frame with an
   alpha bounce animation, the glow textures and a "!"), plus a % box.
@@ -90,7 +95,12 @@ Every file shares the addon namespace `ns`.
   both glows shown, each made visible or invisible by the game through
   `SetAlphaFromBoolean(isTanking)`; `none` → nothing.
 - Glow styles: border (the plate's own selection-border art), outline, pixel lines, autocast
-  sparkles. Pixel and autocast each run their own `OnUpdate` driver while visible.
+  sparkles. Pixel and autocast glows join the animation manager (`Renderer.Anim`: one shared
+  `OnUpdate`) while shown and leave when hidden; with none showing, its frame is hidden.
+- Each indicator is restyled only when a setting changes (`ns.lookGen`, bumped by the settings
+  window and the slash commands), its plate shows a new enemy, or it switches role set; and
+  redrawn only when its state, shown %, target outline or style changed. A hidden % can't be
+  compared: its text is handed to the game again each update (cheap).
 - The game's plate: the "!" and % go past the raid marker, elite icon and buff row (hooked once
   per game unit frame to follow them), and the game's "Progressive" aggro flare is hidden
   (hooked once per game unit frame) while "Replace the game's aggro highlight" is on.
@@ -110,8 +120,10 @@ Every file shares the addon namespace `ns`.
 | Ownership: you, your pet, a group tank, a member, a member's pet, unknown | 5.2.0 (observed from status 2–3; "unknown" is inferred) |
 | Tracking modes: me, my pet, me and my pet, the group's tanks | 5.2.0 |
 | Guardians and summons other than your `pet` | Not tracked: the game gives addons no unit token for them (only their nameplates, which are friendly units, not threat holders Holdfast can ask about). An enemy attacking one shows as "unknown" (inferred) |
-| Event-driven updates without the ticker | Partly (events + 0.25 s ticker). Milestone 4 |
-| Shared animation manager | Not implemented (one `OnUpdate` per visible pixel / autocast glow). Milestone 4 |
+| Event-driven updates | 5.3.0: events, merged per frame; a 1 s check only in combat |
+| Shared animation manager | 5.3.0: one driver, only glows showing |
+| Nameplate adapters | 5.3.0: EllesmereUI, FlareUI, Blizzard, generic |
+| Performance counters | 5.3.0: `/hf perf` (Milestone 6 adds status, profile, reset) |
 | Transition events | One debug callback (`State.onTransition`). Milestone 5 |
 | Overview window, notifications | Not implemented. Milestone 5 |
 | Diagnostics | `/hf debug` (per-enemy threat calls, value / nil / hidden / error / n/a, at every state change), `/hf scan`, `/hf tank`, `/hf tip` probes. Milestone 6 adds status, perf, profile, reset |
@@ -135,9 +147,9 @@ setups, wasted resources or a latency bug; **Low** = cosmetic, cleanup or an edg
 | 9 | Low | Settings from a newer version (after going back a version) would be wiped: only versions 3–5 were kept. | Core.lua | Fixed: only versions before 3 start fresh |
 | 10 | Low | Dead code: `Cap()`, the `insecure` state in `HAS_AGGRO` (never produced) and the transition flag built from it, `ns.db.enabled` (no such setting), unused locals (`db`, `col`, `rr`, `arg`), a `kind` shadowing `kind`, `issecure()` passed as `includeForbidden`. | Renderer, ThreatState, Engine, Options, UnitRegistry | Fixed |
 | 11 | Medium | The unstable glow and the % are unreachable (see above). The never-read `unstableAt` and `showPercent` settings were removed in 5.0.2; Milestone 2 adds the settings it needs. | ThreatState, Renderer, Core | Milestone 2 (new functionality, not a fix) |
-| 12 | Medium | Every update restyles every indicator (colors, alpha, durations, the box style, the Questie icon search with a table per call), every plate, 4 times a second, whether or not anything changed. | Renderer.lua | Milestone 4 |
-| 13 | Medium | In hidden mode both glows are shown and the game sets one to alpha 0; with pixel / autocast styles the invisible one's `OnUpdate` still runs every frame. | Renderer.lua | Milestone 4 (animation manager) |
-| 14 | Medium | `Engaged` calls `UnitThreatSituation` for every group member (up to 42 in a raid) per enemy per update; in raids, with the ticker, that's thousands of calls a second. | ThreatState.lua | Milestone 3 / 4 |
+| 12 | Medium | Every update restyles every indicator (colors, alpha, durations, the box style, the Questie icon search with a table per call), every plate, 4 times a second, whether or not anything changed. | Renderer.lua | 5.3.0: restyle only on change, redraw only on change |
+| 13 | Medium | In hidden mode both glows are shown and the game sets one to alpha 0; with pixel / autocast styles the invisible one's `OnUpdate` still runs every frame. | Renderer.lua | 5.3.0: one shared driver; in hidden mode both glows still animate (the game decides which is seen, so Holdfast can't tell) |
+| 14 | Medium | `Engaged` calls `UnitThreatSituation` for every group member (up to 42 in a raid) per enemy per update; in raids, with the ticker, that's thousands of calls a second. | ThreatState.lua | 5.2.0: roster cached; 5.3.0: no ticker, merged events. Still one call per group member per enemy evaluation (needed to know who holds it) |
 | 15 | Low | In hidden mode, an enemy in combat with players outside your group still counts as engaged (the game hides whether anyone of yours is on its list), so as the tank it can show red. | ThreatState.lua | Documented; Milestone 3 |
 | 16 | Low | The indicator's frame level is set once from the bar; if a nameplate addon raises its bar later, the glow could sit under it. | Renderer.lua | Watch in game |
 | 17 | Low | In a raid, `raidN` includes you, so you're asked twice (harmless). | ThreatState.lua | Milestone 3 |
@@ -182,6 +194,7 @@ test seams `Renderer.Indicator` / `Renderer.Counts`.
 ```
 pip install lupa
 python3 tests/run_tests.py
+python3 tests/bench.py [another copy of the addon, to compare]
 ```
 
 `tests/mock.lua` is a small mock of the client. The tests check the states for tank / not the
@@ -238,6 +251,31 @@ or chat output). The next milestone starts only once those results are in.
    leader). Send it, and screenshots of 2-4, and any Lua errors.
 6. Still open from Milestone 2: orange as not the tank (`status=1`), "Warn at" solo, and the game's
    flare coming back when "Replace" is unticked.
+
+#### Milestone 4 → 5
+
+1. Install 5.3.0, `/reload`. Everything should look and behave as in 5.2.0.
+2. Fight a large pull (5+ enemies) in a party with the glow style on "Pixel lines" or "Autocast
+   sparkles", then type `/hf perf`. Send it: it shows plates tracked, threat evaluations,
+   redraws vs unchanged, restyles, the average update time and how many glows are animating.
+3. Out of combat, `/hf perf` again: "safety check: off".
+4. Change a colour, the strength or the "!" setting mid-fight: every plate takes it at once.
+5. With FlareUI's and with EllesmereUI's nameplates: glows and the % in their look, as before
+   (`/hf perf` lists "flare" / "eui" under indicators showing).
+6. Still open: "The group's tanks", "Me and my pet", "Warn at" solo, and "Replace the game's aggro
+   highlight" unticked mid-fight.
+
+### Performance (mock client, `python3 tests/bench.py`)
+
+10 s of a party fight, 20 enemy plates, pixel glows, three threat-list updates a frame:
+
+| | 5.2.0 | 5.3.0 |
+|---|---|---|
+| Threat evaluations | 3800 | 2820 |
+| Restyles + redraws | 3800 each (every update) | 40 restyles, 140 redraws, 2740 unchanged |
+| Lua time (mock, mostly the mock itself) | 626–767 ms | ~478 ms |
+
+The mock's times only compare versions; in-game numbers come from `/hf perf`.
 
 ## Known limitations (from earlier in-game tests)
 

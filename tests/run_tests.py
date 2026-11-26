@@ -11,7 +11,8 @@ from lupa.lua51 import LuaRuntime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-FILES = ['Core', 'UnitRegistry', 'ThreatState', 'Renderer', 'UI', 'Options', 'Engine']
+# the addon's files, in the toc's load order
+FILES = [l.strip()[:-4] for l in open(os.path.join(ROOT, 'Holdfast.toc')) if l.strip().endswith('.lua') and not l.startswith('#')]
 
 def load():
     L = LuaRuntime()
@@ -135,7 +136,7 @@ def _(L, ns):
     lua(L, '''
       NS.db.role = "dps"; MOCK.threat.player = { tanking = false, status = 1, pct = 93.6 }
       MOCK.Look(); assert(MOCK.Pct() == "", "off by default")
-      NS.db.showPercent = true; MOCK.Look(); assert(MOCK.Pct() == "94%", MOCK.Pct())
+      MOCK.Set("showPercent", true); MOCK.Look(); assert(MOCK.Pct() == "94%", MOCK.Pct())
       local f = NS.Renderer.Indicator(MOCK.plate)
       assert(f.pct._color[1] == NS.db.colorsDps.unstable[1], "orange")
       MOCK.threat.player = { tanking = true, status = 3, pct = 130 }; MOCK.Look(); assert(MOCK.Pct() == "100%", MOCK.Pct())
@@ -150,7 +151,7 @@ def _(L, ns):
 def _(L, ns):
     lua(L, '''
       UnitIsUnit = function() return true end
-      NS.db.showPercent = true; NS.preview = "unstable"
+      MOCK.Set("showPercent", true); NS.preview = "unstable"
       assert(MOCK.Look():find("unstable$"), MOCK.Look())
       assert(MOCK.Pct() == "90%", MOCK.Pct())
     ''')
@@ -217,6 +218,80 @@ def _(L, ns):
       assert(calls < 20, "the roster isn't rebuilt on every update: " .. calls .. " UnitExists calls")
     ''')
 
+@test("M4 animation manager: one driver, only the moving glows showing; none showing, it stops")
+def _(L, ns):
+    lua(L, '''
+      local A = NS.Renderer.Anim
+      MOCK.Set("glowStyle", "pixel"); NS.Renderer.Rebuild()
+      NS.db.role = "tank"; MOCK.threat.player = { tanking = true, status = 3 }
+      MOCK.Look(); assert(A.n == 1, "holding: one pixel glow animating, got " .. A.n)
+      MOCK.threat.player = { tanking = false, status = 0 }; MOCK.Look(); assert(A.n == 1, "lost: still one, got " .. A.n)
+      MOCK.hidden = true; MOCK.threat.player = { tanking = true, status = 3 }; MOCK.Look()
+      assert(A.n == 2, "hidden: both glows shown (the game picks one), got " .. A.n)
+      MOCK.hidden = false; MOCK.threat = {}; MOCK.Look()
+      assert(A.n == 0, "nothing showing: nothing animating, got " .. A.n)
+      MOCK.Set("glowStyle", "border"); NS.Renderer.Rebuild()
+      MOCK.threat.player = { tanking = true, status = 3 }; MOCK.Look()
+      assert(A.n == 0, "the border glow doesn't move: not in the manager")
+    ''')
+
+@test("M4 an unchanged plate isn't redrawn or restyled; a setting change restyles each plate once")
+def _(L, ns):
+    lua(L, '''
+      local c = NS.Renderer.counters
+      MOCK.threat.player = { tanking = true, status = 3 }; MOCK.Look()
+      local r, k, st = c.renders, c.skipped, c.styles
+      MOCK.Look(); MOCK.Look(); MOCK.Look()
+      assert(c.renders == r and c.skipped == k + 3 and c.styles == st, "unchanged: skipped")
+      MOCK.threat.player = { tanking = false, status = 0 }; MOCK.Look()
+      assert(c.renders == r + 1 and c.styles == st, "a new state: redrawn, not restyled")
+      MOCK.Set("showIcon", false); MOCK.Look(); MOCK.Look()
+      assert(c.styles == st + 1, "a setting: restyled once")
+      assert(MOCK.Glows() == "nothreat", "the \\"!\\" off: " .. MOCK.Glows())
+      SlashCmdList.HOLDFAST("icon"); assert(MOCK.Glows() == "nothreat!", "/hf icon applies at once: " .. MOCK.Glows())
+    ''')
+
+@test("M4 driven by events: no polling out of combat; a 1 s check only in combat; bursts merged")
+def _(L, ns):
+    lua(L, '''
+      local live = 0
+      for _, t in ipairs(MOCK.tickers) do if not t.cancelled then live = live + 1 end end
+      assert(live == 0, "out of combat: no timer")
+      MOCK.combat = true; MOCK.Fire("PLAYER_REGEN_DISABLED"); MOCK.RunTimers()
+      local t = MOCK.tickers[#MOCK.tickers]
+      assert(t and t.sec == 1 and not t.cancelled, "in combat: a check every second")
+      MOCK.combat = false; MOCK.Fire("PLAYER_REGEN_ENABLED"); MOCK.RunTimers()
+      assert(t.cancelled, "out of combat again: stopped")
+      local n, real = 0, NS.State.Update
+      NS.State.Update = function(...) n = n + 1; return real(...) end
+      for i = 1, 20 do MOCK.Fire("UNIT_THREAT_LIST_UPDATE", "nameplate1") end
+      for i = 1, 20 do MOCK.Fire("UNIT_THREAT_SITUATION_UPDATE", "party1") end
+      assert(n == 0, "nothing yet: merged to the next frame")
+      MOCK.RunTimers()
+      assert(n == 1, "40 events, one evaluation of the one plate: " .. n)
+      NS.State.Update = real
+    ''')
+
+@test("M4 adapters: EllesmereUI, FlareUI, the game's plate, or the plate itself")
+def _(L, ns):
+    lua(L, '''
+      local A = NS.Adapters
+      assert(A.Find(MOCK.plate, "nameplate1").kind == "blizzard")
+      MOCK.euiShown = true; assert(A.Find(MOCK.plate, "nameplate1").kind == "eui"); MOCK.euiShown = false
+      local parts = { box = MOCK.obj(), root = MOCK.obj(), level = MOCK.obj() }
+      FlareUI = { Nameplates = { PartsFor = function() return parts end } }
+      local ad, parent, bar = A.Find(MOCK.plate, "nameplate1")
+      assert(ad.kind == "flare" and parent == parts.root and bar == parts.box)
+      FlareUI.Nameplates.PartsFor = function() error("changed") end
+      assert(A.Find(MOCK.plate, "nameplate1").kind == "blizzard", "FlareUI erroring: the next adapter")
+      FlareUI = nil
+      local bare = MOCK.obj()
+      assert(A.Find(bare, "nameplate9").kind == "generic", "an unknown nameplate: the plate itself")
+      PRINTS = {}; MOCK.threat.player = { tanking = true, status = 3 }; MOCK.Look(); SlashCmdList.HOLDFAST("perf")
+      local out = table.concat(PRINTS, "\\n")
+      assert(out:find("blizzard 1") and out:find("threat evaluations"), out)
+    ''')
+
 @test("renderer: a host switch (EllesmereUI plate shows late) reuses indicators, no new frames")
 def _(L, ns):
     lua(L, '''
@@ -250,12 +325,13 @@ def _(L, ns):
     lua(L, '''
       MOCK.threat.player = { tanking = true, status = 3 }
       local uf = MOCK.plate.UnitFrame
-      uf.aggroHighlightShown = true; uf.aggroHighlightBase:Show()
-      NS.db.replaceGameHighlight = true; MOCK.Look()
-      assert(not uf.aggroHighlightBase:IsShown(), "hidden")
+      MOCK.Look()
+      assert(not uf.aggroHighlightBase:IsShown(), "hidden (Replace is on by default)")
+      -- the game shows it again (through its UpdateAggroHighlight, which Holdfast hooks)
+      uf.aggroHighlightShown = true
       uf.aggroHighlightBase:Show(); MOCK.RunHooks(uf, "UpdateAggroHighlight")
       assert(not uf.aggroHighlightBase:IsShown(), "hidden again after the game re-shows it")
-      NS.db.replaceGameHighlight = false; MOCK.Look()
+      MOCK.Set("replaceGameHighlight", false); MOCK.Look()
       assert(uf.aggroHighlightBase:IsShown(), "given back")
       uf.aggroHighlightBase:Hide(); MOCK.Look()
       assert(not uf.aggroHighlightBase:IsShown(), "and then left to the game")

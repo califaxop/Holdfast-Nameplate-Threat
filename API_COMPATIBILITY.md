@@ -104,6 +104,14 @@ when the unit would pull. Milestone 2 must check this in game before relying on 
 | `OnUpdate` scripts | Pixel and autocast glows, one driver each while visible | Used in game |
 | `BackdropTemplate` | The % box | Used in game |
 
+## Timing
+
+| API | Notes | Status |
+|---|---|---|
+| `C_Timer.After(0, fn)` | Next-frame merge of events | Used in game since 4.0.2 |
+| `C_Timer.NewTicker(1, fn)` / `:Cancel()` | The in-combat safety check | Docs; used in game (the 0.25 s ticker before 5.3.0) |
+| `debugprofilestop()` | Milliseconds, for `/hf perf`'s average update time | Docs (FrameScript) |
+
 ## Testing an API in game
 
 - `/hf scan` (any time), and `/hf debug` (on: the same, then again at every state change): per enemy, the followed unit's `isTanking` (`on you=`),
