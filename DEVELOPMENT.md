@@ -163,7 +163,12 @@ tank / pet, readable and hidden answers, the indicator and hook lifecycle, the f
 paths, settings migration and the slash commands. They can't prove how the real client behaves:
 the mock's hidden values are tables, and the real client is stricter.
 
-### In game (Milestone 1 validation)
+### In game: the gate between milestones
+
+Each milestone ends with an in-game checklist: what to do, and what to send back (screenshots
+or chat output). The next milestone starts only once those results are in.
+
+#### Milestone 1 → 2
 
 1. `/reload` with only Holdfast, then with FlareUI's nameplates, then with EllesmereUI's.
 2. Solo, tank a mob: green while it's on you; let a pet or a friend take it: red with "!".
