@@ -10,14 +10,11 @@ local V = {}
 ns.Renderer = V
 
 local isSecret = ns.isSecret
-local indicators = {}   -- plate -> indicator frame
+-- Indicators are frames, and frames can't be freed: each is made once per host bar and glow
+-- style, then reused (nameplates and FlareUI's / EllesmereUI's plates are recycled too).
+local current = {}      -- plate -> the indicator shown on it now
+local pool = setmetatable({}, { __mode = "k" }) -- host bar -> { [glow style] = indicator }
 local TEXT_LEVEL = 30   -- % and "!" sit this many frame levels above the health bar (over debuff icons)
-
--- show at most 100%; a hidden (secret) value can't be compared, so it passes through as is
-local function Cap(v)
-  if isSecret(v) or type(v) ~= "number" then return v end
-  return v > 100 and 100 or v
-end
 
 local function HealthBarOf(plate)
   local uf = plate.UnitFrame
@@ -343,15 +340,13 @@ local function MakeFlash(f, bar, kind)
   return { holder = holder, glow = glow, anim = anim, alpha = a, icon = icon }
 end
 
-local MAX_GATES = 5 -- party members + pet
-
 local function Create(plate, parent, bar, kind, src)
   -- on the plate's own unit frame (the bar's parent chain), so it moves and scales with the bar
   -- exactly; never anchored to the plate's base frame (FlareUI's / EllesmereUI's plate when they draw it)
   local f = CreateFrame("Frame", nil, parent)
   f:SetFrameLevel(bar:GetFrameLevel() + 2) -- just above the bar/border
   f.kind, f.src = kind, src
-  f.uf, f.plate, f.outer, f.watching, f.flareHooked = false, plate, false, false, false
+  f.uf, f.plate, f.outer = false, plate, false
   if kind == "blizzard" then f.uf = parent end -- (the game's plate: what sits left of its bar, see LeftOf)
 
   f:SetAllPoints(bar)
@@ -359,20 +354,6 @@ local function Create(plate, parent, bar, kind, src)
   f.aggro    = MakeFlash(f, bar, kind)  -- stable
   f.unstable = MakeFlash(f, bar, kind)  -- unstable
   f.nothreat = MakeFlash(f, bar, kind)  -- no threat
-
-  -- hidden-value mode: one unstable glow per group member, each switched on by the client
-  -- when *that* member's hidden threat % reaches the threshold; all inside a holder that the
-  -- client shows only while you're tanking.
-  f.hidTank = CreateFrame("Frame", nil, f)
-  f.hidTank:SetAllPoints()
-  f.gates = {}
-  for i = 1, MAX_GATES do
-    local gate = CreateFrame("Frame", nil, f.hidTank)
-    gate:SetAllPoints()
-    local fl = MakeFlash(gate, bar, kind)
-    f.gates[i] = { frame = gate, flash = fl }
-  end
-  f.hidTank:Hide()
 
   f.top = CreateFrame("Frame", nil, f) -- above the plate's debuff icons
   f.top:SetAllPoints(); f.top:SetFrameLevel(bar:GetFrameLevel() + TEXT_LEVEL)
@@ -493,21 +474,28 @@ local function PlaceIcons(f, pctShown)
     else fl.icon:SetPoint("RIGHT", f.bar, "LEFT", -(f.textX or 6), 0) end
   end
   for _, fl in ipairs({ f.unstable, f.nothreat }) do placeIcon(fl) end
-  for _, g in ipairs(f.gates) do placeIcon(g.flash) end
 end
 
 -- the glow settings in use: yours as the tank (or your pet's), or yours when you're not the tank
 -- the game's plate: place ours again when its buffs, elite icon or raid marker come or go
 -- (between our own updates)
+-- Hooks can't be removed, so each game unit frame is hooked once; the hook looks up the
+-- indicator on that plate when it runs (never one it captured, which may be gone by then).
+local leftHooked = setmetatable({}, { __mode = "k" })   -- game unit frame -> true
+local flareHooked = setmetatable({}, { __mode = "k" })  -- game unit frame -> true
+local flareHidden = setmetatable({}, { __mode = "k" })  -- game unit frame -> we hid its flare
 local function WatchLeft(f)
-  if f.watching or not T(f.uf) then return end
-  f.watching = true
+  local uf = T(f.uf)
+  if not uf or leftHooked[uf] then return end
+  leftHooked[uf] = true
+  local plate = f.plate
   local function again()
-    f.placedKey = nil
-    PlaceText(f, f.plate and QuestieIcon(f.plate))
-    PlaceIcons(f, f.pctBox:IsShown() and true or false)
+    local cur = current[plate]
+    if not (cur and cur.uf == uf) then return end
+    cur.placedKey = nil
+    PlaceText(cur, QuestieIcon(plate))
+    PlaceIcons(cur, cur.pctBox:IsShown() and true or false)
   end
-  local uf = f.uf
   local buffs = T(uf.AurasFrame) and T(uf.AurasFrame.BuffListFrame)
   local cls, rt = T(uf.ClassificationFrame), T(uf.RaidTargetFrame)
   for _, w in ipairs({ { buffs, "OnSizeChanged" }, { buffs, "OnShow" }, { buffs, "OnHide" },
@@ -519,18 +507,35 @@ end
 -- The game's own aggro highlight (Options > Nameplates > Aggro Display: Progressive): a flare along
 -- the top of the bar. On the plates we draw, ours replaces it (setting "Replace the game's aggro
 -- highlight"): hidden whenever the game shows it. Its Flash and Health Bar Color options stay its own.
+local FLARE_PARTS = { "aggroHighlightBase", "aggroHighlightAdditive" }
 local function HideGameFlare(uf)
-  for _, k in ipairs({ "aggroHighlightBase", "aggroHighlightAdditive" }) do
+  for _, k in ipairs(FLARE_PARTS) do
     local t = T(uf[k])
     if t and t.Hide then pcall(t.Hide, t) end
   end
+  flareHidden[uf] = true
+end
+-- the setting was turned off: give the game its flare back where it wants it shown now (else
+-- it would stay hidden until the game next switched it on)
+local function RestoreGameFlare(uf)
+  if not flareHidden[uf] then return end
+  flareHidden[uf] = nil
+  local want = uf.aggroHighlightShown
+  if isSecret(want) or want ~= true then return end
+  for _, k in ipairs(FLARE_PARTS) do
+    local t = T(uf[k])
+    if t and t.Show then pcall(t.Show, t) end
+  end
 end
 local function WatchGameFlare(f)
-  if f.flareHooked or not T(f.uf) then return end
-  f.flareHooked = true
-  if hooksecurefunc and type(f.uf.UpdateAggroHighlight) == "function" then
-    pcall(hooksecurefunc, f.uf, "UpdateAggroHighlight", function(uf)
-      if ns.db and ns.db.enabled ~= false and ns.db.replaceGameHighlight then HideGameFlare(uf) end
+  local uf = T(f.uf)
+  if not uf or flareHooked[uf] then return end
+  flareHooked[uf] = true
+  local plate = f.plate
+  if hooksecurefunc and type(uf.UpdateAggroHighlight) == "function" then
+    pcall(hooksecurefunc, uf, "UpdateAggroHighlight", function(frame)
+      local cur = current[plate]
+      if ns.db and ns.db.replaceGameHighlight and cur and cur.uf == frame then HideGameFlare(frame) end
     end)
   end
 end
@@ -551,7 +556,6 @@ local function Style(f, dps, plate)
   -- the "!" goes with the red glow: not the tank, it's on you; the tank (or your pet), you lost it
   StyleFlash(f.unstable, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, false)
   StyleFlash(f.nothreat, col.nothreat, st.nothreat.alpha, st.nothreat.speed or 0.25, db.showIcon)
-  for _, g in ipairs(f.gates) do StyleFlash(g.flash, col.unstable, st.unstable.alpha, st.unstable.speed or 0.35, db.showIcon) end
 end
 
 -- on: the glow is visible; flashing: it pulses (else it stays steady)
@@ -562,20 +566,14 @@ local function ShowFlash(fl, on, flashing)
   elseif not pulse and fl.anim:IsPlaying() then fl.anim:Stop() end
 end
 
-local function HideGates(f)
-  f.hidTank:Hide()
-  for _, g in ipairs(f.gates) do ShowFlash(g.flash, false) end
-end
-
 local function HideAll(f)
   ShowFlash(f.aggro, false); ShowFlash(f.unstable, false); ShowFlash(f.nothreat, false); f.pct:Hide()
-  HideGates(f)
 end
 
 local Render
 function V.Render(plate, state, unit)
   Render(plate, state, unit)
-  local f = plate and indicators[plate]
+  local f = plate and current[plate]
   if not f then return end
   -- the % box follows the %: shown with it, sized to it
   local shown = f.pct:IsShown() and true or false
@@ -594,29 +592,50 @@ function V.Render(plate, state, unit)
   end
 end
 
+-- The indicator for this host bar in this glow style: reused if it was made before.
+local function Acquire(plate, parent, bar, kind, src, style)
+  local byStyle = pool[bar]
+  if not byStyle then byStyle = {}; pool[bar] = byStyle end
+  local f = byStyle[style]
+  if not f then
+    f = Create(plate, parent, bar, kind, src)
+    f.style = style
+    byStyle[style] = f
+  end
+  -- a recycled FlareUI / EllesmereUI plate can move to another game plate: let go of the old one
+  if f.plate ~= plate and current[f.plate] == f then current[f.plate] = nil end
+  f.plate, f.kind, f.src = plate, kind, src
+  f.uf = (kind == "blizzard") and parent or false
+  f.placedKey, f.iconKey = nil, nil
+  return f
+end
+
 function Render(plate, state, unit)
   if not plate then return end
   local parent, bar, kind, src = Host(plate, unit)
-  local f = indicators[plate]
-  if f and (f.bar ~= bar or f.kind ~= kind) then -- the plate is drawn by another UI now (or no longer)
-    HideAll(f); f:Hide(); f = nil
+  local style = GlowStyle(kind)
+  local f = current[plate]
+  if f and (f.bar ~= bar or f.kind ~= kind or f.style ~= style) then
+    -- the plate is drawn by another UI now (or no longer), or the glow style changed
+    HideAll(f); f:Hide(); current[plate] = nil; f = nil
   end
-  if not f then f = Create(plate, parent, bar, kind, src); indicators[plate] = f end
+  if not f then f = Acquire(plate, parent, bar, kind, src, style); current[plate] = f end
   f:Show()
-  if f.uf and ns.db.replaceGameHighlight then WatchGameFlare(f); HideGameFlare(f.uf) end
+  if f.uf then
+    if ns.db.replaceGameHighlight then WatchGameFlare(f); HideGameFlare(f.uf) else RestoreGameFlare(f.uf) end
+  end
   local dps = state and state.dps or false
   Style(f, dps, plate)
-  local db = ns.db
-  local st, col = Sets(dps)
-  local kind = state and state.kind or "none"
+  local st = Sets(dps)
+  local what = state and state.kind or "none"
 
   f.aggro.holder:SetAlpha(1); f.unstable.holder:SetAlpha(1); f.nothreat.holder:SetAlpha(1)
 
-  if kind == "none" then HideAll(f); return end
-  HideGates(f); f.pct:Hide()
+  if what == "none" then HideAll(f); return end
+  f.pct:Hide()
   ShowFlash(f.unstable, false)
 
-  if kind == "hidden" then
+  if what == "hidden" then
     -- The game hides it: the hidden "is it on you" answer turns the glows (and the "!") on and off
     -- itself, without us reading it. As the tank on you is good; not the tank, it's the bad one.
     local t = state.isTanking
@@ -632,18 +651,29 @@ function Render(plate, state, unit)
   end
 
   -- readable: on you or not
-  ShowFlash(f.aggro, kind == "secure" and st.aggro.show, st.aggro.flash)
-  ShowFlash(f.nothreat, kind == "lost" and st.nothreat.show, st.nothreat.flash)
+  ShowFlash(f.aggro, what == "secure" and st.aggro.show, st.aggro.flash)
+  ShowFlash(f.nothreat, what == "lost" and st.nothreat.show, st.nothreat.flash)
 end
 
 function V.Hide(plate)
-  local f = plate and indicators[plate]
+  local f = plate and current[plate]
   if f then HideAll(f) end
 end
 
--- the glow style changed: rebuild every indicator on its next update
+-- the glow style changed: every plate picks its indicator in the new style on its next update
+-- (one made earlier in that style is reused)
 function V.Rebuild()
-  for plate, f in pairs(indicators) do HideAll(f); f:Hide(); indicators[plate] = nil end
+  for plate, f in pairs(current) do HideAll(f); f:Hide(); current[plate] = nil end
+end
+
+-- for diagnostics and tests: the indicator on a plate; indicators made so far, and the plates showing one
+function V.Indicator(plate) return current[plate] end
+-- for diagnostics and tests: indicators made so far, and the plates showing one
+function V.Counts()
+  local made, shown = 0, 0
+  for _, byStyle in pairs(pool) do for _ in pairs(byStyle) do made = made + 1 end end
+  for _ in pairs(current) do shown = shown + 1 end
+  return made, shown
 end
 
 V.HasSecretSupport = function() return UIParent.SetAlphaFromBoolean ~= nil end

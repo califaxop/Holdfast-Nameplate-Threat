@@ -64,7 +64,8 @@ function ns.LoadDB()
   HoldfastDB = HoldfastDB or {}
   local db = HoldfastDB
   local v = db.version
-  if v ~= 3 and v ~= 4 and v ~= 5 then wipe(db) end -- older designs: start fresh
+  -- designs before 3: start fresh (a newer version's settings, after going back a version, are kept)
+  if type(v) ~= "number" or v < 3 then wipe(db) end
   if v == 3 and db.colors then
     -- 3 -> 4: the old orange "not stable" colour becomes the "unstable" colour; settings kept
     db.colors.unstable = db.colors.unstable or db.colors.loss

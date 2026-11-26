@@ -41,6 +41,7 @@ function S.Role()
   if r == "dps" then return "dps" end
   if not (IsInGroup and IsInGroup()) then return nil end
   local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned("player")
+  if not Readable(role) then return nil end -- (can be hidden: then no role is known)
   if role == "TANK" then return "tank" end
   if role == "DAMAGER" or role == "HEALER" then return "dps" end
   return nil
@@ -110,7 +111,10 @@ local function Evaluate(unit)
 
   local mode = S.Mode()
   local dps = mode == "dps"
-  local followed = (mode == "pet") and (PetOut() and "pet" or nil) or "player"
+  -- (not `mode == "pet" and (PetOut() and "pet" or nil) or "player"`: with no pet out, that
+  -- and/or chain falls through to "player")
+  local followed
+  if mode == "pet" then followed = PetOut() and "pet" or nil else followed = "player" end
   if not followed then return { kind = "none" } end -- "My pet" chosen, but no pet out
 
   local engaged = Engaged(followed, unit)
@@ -128,15 +132,11 @@ local function Evaluate(unit)
   return { kind = kind, dps = dps, tank = followed }
 end
 
-local HAS_AGGRO = { secure = true, insecure = true }
-
 function S.Update(unit)
   local new = Evaluate(unit)
   local old = states[unit]
   states[unit] = new
-  if S.onTransition and old and old.kind ~= new.kind then
-    S.onTransition(unit, old, new, HAS_AGGRO[old.kind] and not HAS_AGGRO[new.kind] and new.kind ~= "none")
-  end
+  if S.onTransition and old and old.kind ~= new.kind then S.onTransition(unit, old, new) end
   return new
 end
 

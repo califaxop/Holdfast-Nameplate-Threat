@@ -45,7 +45,7 @@ ev:SetScript("OnEvent", function(_, event, unit)
     for _, e in ipairs({ "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
       "UNIT_THREAT_LIST_UPDATE", "UNIT_THREAT_SITUATION_UPDATE",
       "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE",
-      "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED", "UNIT_PET" }) do
+      "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED", "UNIT_PET", "PLAYER_ROLES_ASSIGNED" }) do
       ev:RegisterEvent(e)
     end
     C_Timer.NewTicker(0.25, UpdateAll) -- safety net for missed updates
@@ -56,6 +56,8 @@ ev:SetScript("OnEvent", function(_, event, unit)
     V.Hide(R.Remove(unit)); S.Clear(unit)
   elseif event == "UNIT_THREAT_LIST_UPDATE" and unit and R.Get(unit) then
     UpdateUnit(unit)
+  -- (any other token - "target", "focus", "boss1"... - falls through to one batched update of
+  -- every plate: the event names the enemy by only one of its tokens, not always its nameplate's)
   elseif event == "PLAYER_ENTERING_WORLD" then
     R.Scan(); UpdateAll()
   else
@@ -71,7 +73,7 @@ local TOGGLES = { icon = "showIcon" }
 SLASH_HOLDFAST1 = "/hf"
 SLASH_HOLDFAST2 = "/holdfast"
 SlashCmdList.HOLDFAST = function(msg)
-  local cmd, arg = (msg or ""):lower():match("^(%S*)%s*(.-)$")
+  local cmd = (msg or ""):lower():match("^(%S*)")
   local db = ns.db
   if cmd == "" or cmd == "config" or cmd == "options" then
     local ok, e = pcall(ns.OpenOptions)
@@ -162,11 +164,29 @@ SlashCmdList.HOLDFAST = function(msg)
       ns.Dbg("following:", tank == "pet" and "your pet" or tank == "player" and "you" or "nobody (no pet out)",
         "| glows:", mode == "pet" and "your pet's aggro" or mode == "dps" and "you, not the tank" or "you, the tank",
         "| role:", S.Role(true) or "not set")
+      -- each value as the game gives it: a number / true / false, nil, <hidden>, error, or n/a
+      -- (the call isn't in this client). Nothing hidden is read; this only says it's hidden.
+      local function probe(fn, ...)
+        if type(fn) ~= "function" then return { "n/a" } end
+        local r = { pcall(fn, ...) }
+        if not r[1] then return { "error" } end
+        local out = {}
+        for i = 2, math.max(2, #r) do out[#out + 1] = show(r[i]) end
+        return out
+      end
+      local CS = C_Secrets or {}
+      local who = tank or "player"
       for unit in R.Each() do
         n = n + 1
-        local okT, isT = pcall(UnitDetailedThreatSituation, tank or "player", unit)
         local st = S.Get(unit)
-        ns.Dbg(unit, "on " .. (tank == "pet" and "your pet" or "you") .. "=" .. (okT and show(isT) or "error"), "-> " .. (st and st.kind or "?"))
+        local d = probe(UnitDetailedThreatSituation, who, unit)
+        ns.Dbg(unit, "-> " .. (st and st.kind or "?"),
+          "| on " .. (who == "pet" and "your pet" or "you") .. "=" .. d[1],
+          "status=" .. probe(UnitThreatSituation, who, unit)[1],
+          "lead=" .. probe(UnitThreatLeadSituation, who, unit)[1],
+          "pct=" .. (d[3] or d[1]) .. " ofLead=" .. probe(UnitThreatPercentageOfLead, who, unit)[1],
+          "| secret: state=" .. probe(CS.ShouldUnitThreatStateBeSecret, who, unit)[1]
+            .. " values=" .. probe(CS.ShouldUnitThreatValuesBeSecret, who, unit)[1])
       end
       ns.Dbg("nameplates tracked:", n, "| hidden answers drive the glows:",
         V.HasSecretSupport() and "yes" or "no (this client can't)")

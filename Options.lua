@@ -163,7 +163,6 @@ local function BuildPanel(panel)
     rowsRefresh[#rowsRefresh + 1] = function()
       name:SetText(label()[2]); sw.Refresh(); show.Refresh(); flash.Refresh(); str.Refresh(); int.Refresh()
     end
-    local rr = rowsRefresh[#rowsRefresh]
     local sr = sw.Refresh
     sw.Refresh = function() sr(); name:SetText(label()[2]) end
     y = y - 32
