@@ -14,10 +14,8 @@ ns.DEFAULTS = {
     unstable = { show = true, flash = true,  alpha = 0.8, speed = 0.35 },  -- pet tanking: you're catching up
     nothreat = { show = true, flash = true,  alpha = 0.8, speed = 0.25 },  -- lost: it's on someone else
   },
-  unstableAt        = 80,    -- unstable once someone has this % of the threat needed to pull it off you
   showIcon          = true,  -- "!": it's on you (not the tank), or you lost it (tank); replaces the % at 100%
   replaceGameHighlight = true, -- hide the game's own aggro flare (Aggro Display: Progressive) where Holdfast draws
-  showPercent       = false, -- threat % beside the nameplate
   percentGap        = 6,       -- the % box: distance left of the health bar (px)
   percentBgAlpha    = 0.8,     -- the % box's background opacity
   iconOffsetX       = 4,       -- the "!": distance left of the % box (or of the bar, without the %)

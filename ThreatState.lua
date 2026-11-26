@@ -47,9 +47,6 @@ function S.Role()
   return nil
 end
 
--- You count as the tank unless your role says otherwise (as when solo: enemies come to you).
-function S.IsTankRole() return S.Role() ~= "dps" end
-
 -- Which glows to show: "pet" (your pet's aggro), "tank" (yours, as the tank) or "dps" (yours, as
 -- someone who doesn't want it). The two settings only meet on "Whose aggro: Auto":
 --   My pet          -> your pet, whatever your role

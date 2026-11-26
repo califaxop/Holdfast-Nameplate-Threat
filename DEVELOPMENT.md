@@ -87,8 +87,8 @@ The status, scaled %, raw % and raw threat it also returns are not used, nor are
 | Glow styles, colors, strength, flash, interval per glow and per role | Working |
 | Replacing the game's flare | Working (now also given back when turned off) |
 | Preview on your target | Working |
-| **Unstable** (someone close to taking it / you close to pulling it) | **Not reachable.** The glow exists and has settings defaults, but `Evaluate` never returns it and the settings window no longer shows it. `unstableAt` (80) is saved but never read. Milestone 2 |
-| **Threat %** | **Not reachable.** The % box and its settings (`showPercent`, `percentGap`, `percentBgAlpha`) exist, but nothing sets its text or shows it. Milestone 2 |
+| **Unstable** (someone close to taking it / you close to pulling it) | **Not reachable.** The glow exists and has settings defaults, but `Evaluate` never returns it and the settings window no longer shows it. Milestone 2 |
+| **Threat %** | **Not reachable.** The % box and its placement settings (`percentGap`, `percentBgAlpha`) exist, but nothing sets its text or shows it. Milestone 2 |
 | Ownership beyond "on the followed unit or not" | Not implemented. Milestone 3 |
 | Guardians / summons other than `pet` | Not implemented. Milestone 3 |
 | Event-driven updates without the ticker | Partly (events + 0.25 s ticker). Milestone 4 |
@@ -115,7 +115,7 @@ setups, wasted resources or a latency bug; **Low** = cosmetic, cleanup or an edg
 | 8 | Low | Role changes in a group (`PLAYER_ROLES_ASSIGNED`) waited for the ticker. | Engine.lua | Fixed: listened to |
 | 9 | Low | Settings from a newer version (after going back a version) would be wiped: only versions 3–5 were kept. | Core.lua | Fixed: only versions before 3 start fresh |
 | 10 | Low | Dead code: `Cap()`, the `insecure` state in `HAS_AGGRO` (never produced) and the transition flag built from it, `ns.db.enabled` (no such setting), unused locals (`db`, `col`, `rr`, `arg`), a `kind` shadowing `kind`, `issecure()` passed as `includeForbidden`. | Renderer, ThreatState, Engine, Options, UnitRegistry | Fixed |
-| 11 | Medium | The unstable glow and the % are unreachable (see above), and `unstableAt` is never read. | ThreatState, Renderer, Core | Milestone 2 (new functionality, not a fix) |
+| 11 | Medium | The unstable glow and the % are unreachable (see above). The never-read `unstableAt` and `showPercent` settings were removed in 5.0.2; Milestone 2 adds the settings it needs. | ThreatState, Renderer, Core | Milestone 2 (new functionality, not a fix) |
 | 12 | Medium | Every update restyles every indicator (colors, alpha, durations, the box style, the Questie icon search with a table per call), every plate, 4 times a second, whether or not anything changed. | Renderer.lua | Milestone 4 |
 | 13 | Medium | In hidden mode both glows are shown and the game sets one to alpha 0; with pixel / autocast styles the invisible one's `OnUpdate` still runs every frame. | Renderer.lua | Milestone 4 (animation manager) |
 | 14 | Medium | `Engaged` calls `UnitThreatSituation` for every group member (up to 42 in a raid) per enemy per update; in raids, with the ticker, that's thousands of calls a second. | ThreatState.lua | Milestone 3 / 4 |
@@ -148,6 +148,14 @@ ticker is the main cost (finding 12); removing it needs Milestone 4's change tra
 Per indicator (border style): 3 glows × (2 frames + an animation + 2–4 textures + the "!" frame
 and 2 textures), a % box with its art, about 12 frames and 15 textures. Before 5.0.2 it was 8 glow
 sets (about 33 frames and 34 textures), and pixel / autocast styles had 8 drivers each.
+
+## Hygiene
+
+No unused code or settings: before each release, `luacheck` must show no unused variables or
+functions, and every saved setting must be read somewhere. A removed setting's code goes with it
+(an old saved value is simply never read). The only kept exceptions are the
+renderer's dormant unstable glow and % box (Milestone 2 turns them on) and the test seams
+`Renderer.Indicator` / `Renderer.Counts`.
 
 ## Testing
 
