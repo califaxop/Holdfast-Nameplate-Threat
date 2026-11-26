@@ -96,8 +96,6 @@ function ns.LoadDB()
   if db.percentNudgeX ~= nil or db.percentNudgeY ~= nil then -- box under the level (test builds only)
     db.percentNudgeX, db.percentNudgeY, db.iconOffsetX = nil, nil, nil
   end
-  -- 5.0.2: no window-style settings: the window follows EllesmereUI / FlareUI when installed
-  db.flareStyle, db.euiStyle, db.windowStyle = nil, nil, nil
   if not db.iconV2 then db.showIcon = true; db.iconV2 = true end -- 3.9.0: the "!" now stands in for the % at 100%
   db.version = 5
   for k, d in pairs(ns.DEFAULTS) do

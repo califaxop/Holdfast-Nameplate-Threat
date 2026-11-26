@@ -195,9 +195,8 @@ def _(L, ns):
       local th = NS.UI.Theme()
       assert(th.headerFont == GameFontNormalMed2, "header font")
       assert(th.lineFont == GameFontHighlight, "line font")
-      HoldfastDB = { version = 5, euiStyle = false, flareStyle = true, iconV2 = true }; NS.LoadDB()
-      assert(NS.db.windowStyle == nil and NS.db.euiStyle == nil and NS.db.flareStyle == nil, "no style settings")
-      -- the window follows EllesmereUI when it's installed, whatever was saved before
+      -- the window follows EllesmereUI when it's installed (an old saved "style off" is never read)
+      HoldfastDB = { version = 5, euiStyle = false, windowStyle = "plain", iconV2 = true }; NS.LoadDB()
       NS.UI.euiSkin = { GetAccentColor = function() return 1, 0, 0 end, GetFont = function() return "e.ttf", "" end }
       assert(NS.UI.Theme().eui == true, "EllesmereUI's look")
     ''')
