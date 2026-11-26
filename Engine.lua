@@ -64,6 +64,7 @@ local function ThreatLine(unit)
 end
 -- who it's attacking: "on tank (party2)", "on you", or "on unknown (inferred)"
 local function Owner(st)
+  if st and st.kind == "none" then return "not engaged" end
   if not (st and st.ownership) then return "on ?" end
   return "on " .. (st.ownership == "player" and "you" or st.ownership == "pet" and "your pet" or st.ownership)
     .. (st.ownerUnit and st.ownerUnit ~= "player" and st.ownerUnit ~= "pet" and (" (" .. st.ownerUnit .. ")") or "")

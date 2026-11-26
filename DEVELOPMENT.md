@@ -261,4 +261,6 @@ or chat output). The next milestone starts only once those results are in.
 - 5.2.0 in a party, not the tank: ownership observed (`on tank (party1)`, the group's tank by
   role); orange as not the tank seen (`lost -> unstable`, `status=1`); the hidden % drawn on
   several plates at once (0%, 62%).
+- 5.2.0 `/hf scan` in a party mid-fight: engaged enemy `secure (state) | on tank (party1)`;
+  enemies nobody fights `none` (now printed as "not engaged").
 - Not measured yet: "Warn at" solo, "The group's tanks" and "Me and my pet" modes, and raids.
