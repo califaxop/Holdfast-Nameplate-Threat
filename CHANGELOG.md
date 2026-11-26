@@ -15,8 +15,8 @@
 - Fixed: with EllesmereUI installed and its window style off, the settings window's text was
   unreadable (EllesmereUI's quest tracker shrinks the game's tracker fonts, which the window
   borrowed). The window no longer uses a font another addon has shrunk.
-- The two window-style checkboxes are now one setting, "Window look": Auto (EllesmereUI's look
-  when it's installed, else FlareUI's, else the game's) or Plain. Everyone starts on Auto.
+- No window-style settings any more: the settings window takes EllesmereUI's look when it's
+  installed, else FlareUI's, else the game's, on its own.
 - Group role changes update the glows at once.
 - Safer: a hidden group role is treated as no role.
 - Settings saved by a newer version are kept if you go back a version.

@@ -185,7 +185,7 @@ def _(L, ns):
       assert(all:find("secret: state=false values=true"), all)
     ''')
 
-@test("settings window: a shrunk shared font (EllesmereUI's tracker) isn't used; style checkboxes migrate to Auto")
+@test("settings window: a shrunk shared font (EllesmereUI's tracker) isn't used; no style settings: EllesmereUI's look on its own")
 def _(L, ns):
     lua(L, '''
       ObjectiveTrackerHeaderFont = MOCK.obj(); ObjectiveTrackerHeaderFont.GetFont = function() return "x.ttf", 1, "" end
@@ -196,7 +196,10 @@ def _(L, ns):
       assert(th.headerFont == GameFontNormalMed2, "header font")
       assert(th.lineFont == GameFontHighlight, "line font")
       HoldfastDB = { version = 5, euiStyle = false, flareStyle = true, iconV2 = true }; NS.LoadDB()
-      assert(NS.db.windowStyle == "auto" and NS.db.euiStyle == nil and NS.db.flareStyle == nil)
+      assert(NS.db.windowStyle == nil and NS.db.euiStyle == nil and NS.db.flareStyle == nil, "no style settings")
+      -- the window follows EllesmereUI when it's installed, whatever was saved before
+      NS.UI.euiSkin = { GetAccentColor = function() return 1, 0, 0 end, GetFont = function() return "e.ttf", "" end }
+      assert(NS.UI.Theme().eui == true, "EllesmereUI's look")
     ''')
 
 @test("slash commands run without errors")

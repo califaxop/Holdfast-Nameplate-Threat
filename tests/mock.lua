@@ -45,6 +45,7 @@ MOCK.methods = {
   NumLines = function() return 0 end,
 }
 CreateFrame = function() return obj() end
+CreateFont = function() return obj() end
 UIParent = obj(); GameTooltip = obj(); GameTooltip._shown = false; ColorPickerFrame = obj()
 hooksecurefunc = function(t, m, fn)
   MOCK.hooks = MOCK.hooks + 1
