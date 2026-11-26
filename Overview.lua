@@ -13,7 +13,9 @@ local STATE_TEXT = {
   tank = { secure = "holding", unstable = "losing it", lost = "lost", hidden = "hidden", unknown = "?" },
   dps = { secure = "safe", unstable = "close", lost = "on you", hidden = "hidden", unknown = "?" },
 }
-local OWNER_TEXT = { player = "you", pet = "your pet", tank = "tank", member = "member", ["member pet"] = "a pet", unknown = "?" }
+-- (unknown: nobody in your group - a totem or other guardian, someone outside the group - "other*",
+-- the * for inferred; when the game hides the state too, "?")
+local OWNER_TEXT = { player = "you", pet = "your pet", tank = "tank", member = "member", ["member pet"] = "a pet", unknown = "other" }
 local FILTERS = {
   all = function() return true end,
   unstable = function(st) return st.kind == "unstable" end,
@@ -94,7 +96,8 @@ function O.Refresh()
       local colors = dps and ns.db.colorsDps or ns.db.colors
       local c = colors[st.kind == "secure" and "aggro" or st.kind == "unstable" and "unstable" or st.kind == "lost" and "nothreat" or ""]
       if c then r.state:SetTextColor(c[1], c[2], c[3]) else r.state:SetTextColor(0.7, 0.7, 0.7) end
-      r.owner:SetText((OWNER_TEXT[st.ownership] or "?") .. (st.ownerObserved == false and "*" or ""))
+      if st.kind == "hidden" then r.owner:SetText("?")
+      else r.owner:SetText((OWNER_TEXT[st.ownership] or "?") .. (st.ownerObserved == false and "*" or "")) end
       local pct = st.percentage
       if ns.isSecret(pct) then r.pct:SetFormattedText("%.0f%%", pct)
       elseif type(pct) == "number" then r.pct:SetFormattedText("%.0f%%", math.min(100, math.max(0, pct)))

@@ -103,6 +103,8 @@ local function Everyone()
   return list
 end
 
+S.Everyone = Everyone -- (diagnostics: /hf threat)
+
 -- Who a unit is, as an owner: "player", "pet", "tank" (a group tank), "member", "member pet"
 local function OwnerKind(u)
   if u == "player" or u == "pet" then return u end

@@ -357,6 +357,51 @@ def _(L, ns):
       assert(not NS.Overview.IsShown() and MOCK.tickers[#MOCK.tickers].cancelled and NS.db.overview.show == false)
     ''')
 
+@test("M6 diagnostics: /hf status, /hf threat, /hf profile, /hf reset (asks first)")
+def _(L, ns):
+    lua(L, '''
+      MOCK.threat.player = { status = 3, lead = 0 }; MOCK.Look()
+      PRINTS = {}; SlashCmdList.HOLDFAST("status")
+      local out = table.concat(PRINTS, "\\n")
+      assert(out:find("whose aggro: auto") and out:find("glow style") and out:find("nameplates: blizzard 1") and out:find("solo"), out)
+      MOCK.same = function(a, b) return a == "nameplate1" and b == "target" end
+      PRINTS = {}; SlashCmdList.HOLDFAST("threat")
+      out = table.concat(PRINTS, "\\n")
+      assert(out:find("target: secure") and out:find("everyone's status: player=3"), out)
+      PRINTS = {}; SlashCmdList.HOLDFAST("profile 5"); MOCK.RunTimers()
+      out = table.concat(PRINTS, "\\n")
+      assert(out:find("profiling for 5 s") and out:find("profile of the last 5 s") and out:find("threat evaluations"), out)
+      NS.db.glowStyle = "pixel"
+      PRINTS = {}; SlashCmdList.HOLDFAST("reset"); assert(NS.db.glowStyle == "pixel" and table.concat(PRINTS):find("reset yes"))
+      SlashCmdList.HOLDFAST("reset yes"); assert(NS.db.glowStyle == "auto", "reset")
+      PRINTS = {}; SlashCmdList.HOLDFAST("help"); assert(table.concat(PRINTS, " "):find("/hf status"))
+    ''')
+
+@test("M6 edge cases: a group without roles; a healer; several enemies at once; a recycled nameplate")
+def _(L, ns):
+    lua(L, '''
+      -- a group without roles: as when solo (you, as the tank)
+      MOCK.Group(true); NS.db.role = "auto"; MOCK.role = "NONE"
+      assert(NS.State.Mode() == "tank", NS.State.Mode())
+      -- a healer: not the tank
+      MOCK.role = "HEALER"; assert(NS.State.Mode() == "dps")
+      -- several enemies: each its own state
+      for i = 2, 4 do MOCK.AddPlate(i); MOCK.Fire("NAME_PLATE_UNIT_ADDED", "nameplate" .. i) end
+      MOCK.mobs = { nameplate1 = { party1 = { status = 3 }, player = { status = 0 } },
+        nameplate2 = { player = { status = 3 } }, nameplate3 = { party1 = { status = 3 }, player = { status = 1 } }, nameplate4 = {} }
+      NS.UpdateAll()
+      local k = {}
+      for i = 1, 4 do k[i] = NS.State.Get("nameplate" .. i).kind end
+      assert(table.concat(k, " ") == "secure lost unstable none", table.concat(k, " "))
+      -- a nameplate recycled for another enemy: the same frame, a new unit, its own state
+      MOCK.Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
+      MOCK.plates.nameplate1 = nil; MOCK.plates.nameplate5 = MOCK.plate; MOCK.plate.namePlateUnitToken = "nameplate5"
+      MOCK.mobs.nameplate5 = { player = { status = 3 } }
+      MOCK.Fire("NAME_PLATE_UNIT_ADDED", "nameplate5")
+      assert(NS.State.Get("nameplate5").kind == "lost" and NS.State.Get("nameplate1") == nil)
+      assert(MOCK.Glows() == "nothreat!", "the recycled frame shows the new enemy: " .. MOCK.Glows())
+    ''')
+
 @test("renderer: a host switch (EllesmereUI plate shows late) reuses indicators, no new frames")
 def _(L, ns):
     lua(L, '''

@@ -13,10 +13,10 @@ isn't, and tracks the milestone plan. API facts and their verification status li
 | 2 | Threat classification and percentage engine | Done in 5.1.0, validated in game (tank: all three states; not the tank: the hidden %). Orange as not the tank and "Warn at" solo still to see |
 | 3 | Multi-unit ownership and pet tracking | Done in 5.2.0, validated in game (ownership in a party). "The group's tanks", "Me and my pet" still to see |
 | 4 | Rendering and performance improvements | Done in 5.3.0, validated in game (0.1 ms passes; animation driver on and off with the fight; safety check only in combat) |
-| 5 | Notifications, overview and customization | **Done in 5.4.0, waiting for in-game validation** |
-| 6 | Diagnostics, validation and release preparation | Not started |
+| 5 | Notifications, overview and customization | Done in 5.4.0, validated in game (alerts, the overview, a totem shown as inferred) |
+| 6 | Diagnostics, validation and release preparation | **Done in 6.0.0, waiting for the final in-game check** |
 
-## Architecture (as it actually runs, 5.4.0)
+## Architecture (as it actually runs, 6.0.0)
 
 Load order (Holdfast.toc): Core → UnitRegistry → ThreatState → Adapters → Renderer → UI → Events → Alerts → Overview → Options → Engine.
 Every file shares the addon namespace `ns`.
@@ -130,8 +130,8 @@ Every file shares the addon namespace `ns`.
 | Performance counters | 5.3.0: `/hf perf` (Milestone 6 adds status, profile, reset) |
 | Transition events | 5.4.0: Events.lua, `HoldfastAPI` for other addons |
 | Overview window, alerts | 5.4.0: optional, off by default |
-| Diagnostics | `/hf debug` (per-enemy threat calls, value / nil / hidden / error / n/a, at every state change), `/hf scan`, `/hf tank`, `/hf tip` probes. Milestone 6 adds status, perf, profile, reset |
-| Tests | `tests/run_tests.py` (logic only, on a mock client). Milestone 6 widens them |
+| Diagnostics | `/hf status`, `/hf threat [unit]`, `/hf scan`, `/hf debug`, `/hf perf`, `/hf profile [s]`, `/hf reset`, `/hf tank` / `/hf tip` probes. Each answer shows as a value, nil, `<hidden>`, error or n/a; inferred owners are marked |
+| Tests | `tests/run_tests.py` (32, logic only, on a mock client), `tests/bench.py` |
 
 ## Milestone 1 audit (5.0.1 source)
 
@@ -287,6 +287,18 @@ safety check off; 75 passes averaging 0.102 ms.
    stays where you put it. `/hf overview lost` / `me` / `all`: the filter. Close it with ×.
 5. Send a screenshot of the overview mid-fight and of an alert, and any Lua errors.
 6. Still open: "The group's tanks", "Me and my pet", "Warn at" solo, "Replace" unticked mid-fight.
+
+#### Milestone 6 → release (6.0.0)
+
+1. Install 6.0.0, `/reload`. Type `/hf status`: the version says 6.0.0, and the rest matches your
+   settings.
+2. Target an enemy and type `/hf threat`; in a fight, `/hf profile 20` and wait for the report.
+3. `/hf reset`: it asks; `/hf reset yes` puts everything back (then set your role and style again).
+4. The alerts' Test button: "Lost aggro" (no "Unknown"); the settings window: no overlapping text.
+5. A normal party run with your usual settings. Any Lua errors?
+6. Still never seen in game (fine to ship without, each falls back safely): "The group's tanks",
+   "Me and my pet", "Warn at" solo, "Replace the game's aggro highlight" unticked mid-fight, raids.
+7. Then "ship": 6.0.0 goes to CurseForge (after 5.0.2's Wednesday release, or instead of it).
 
 ### Performance (mock client, `python3 tests/bench.py`)
 

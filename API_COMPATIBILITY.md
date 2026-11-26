@@ -120,11 +120,18 @@ when the unit would pull. Milestone 2 must check this in game before relying on 
 | `UnitName(unit)` | Secret when unit name identity is restricted: never compared or read, only handed to `SetFormattedText` | Docs |
 | `GetTime()` | The alerts' 2-second gap | Docs |
 
+## Diagnostics
+
+| API | Notes | Status |
+|---|---|---|
+| `C_AddOns.GetAddOnMetadata(addon, field)` | The version in `/hf status` (falls back to `GetAddOnMetadata`) | Docs |
+
 ## Testing an API in game
 
 - `/hf scan` (any time), and `/hf debug` (on: the same, then again at every state change): per enemy, the followed unit's `isTanking` (`on you=`),
   `status=`, `lead=`, `pct=`, `ofLead=`, and `secret: state= values=`. Each shows a value,
   `nil`, `<hidden>`, `error` (the call failed) or `n/a` (not in this client).
+- `/hf threat [unit]`: one enemy's state, who it's on, every call's answer and everyone's status on it.
 - `/hf tank`: probes on your target, including `SetAlphaFromBoolean` with the status.
 - `/hf tip`: whether the tooltip's threat line is readable.
 

@@ -31,7 +31,7 @@ local function Message(kind, dps, unit)
   local c = colors[kind == "lost" and "nothreat" or "unstable"]
   text:SetTextColor(c[1], c[2], c[3])
   local label = TEXT[kind][dps and "dps" or "tank"]
-  local name = UnitName(unit)
+  local name = unit and UnitName(unit)
   -- (the enemy's name may be hidden: the game draws it, Holdfast doesn't read it)
   if ns.isSecret(name) or name ~= nil then text:SetFormattedText("%s: %s", label, name) else text:SetText(label) end
   fade:Stop(); frame:SetAlpha(1); frame:Show(); fade:Play()
@@ -55,5 +55,5 @@ ns.Events.On("STATE_CHANGED", OnChange)
 function AL.Test()
   local a = ns.db.alerts
   if a.sound then PlaySound(SOUND, "Master") end
-  Message("lost", false, "none") -- (no enemy: just the words)
+  Message("lost", false, nil) -- (no enemy: just the words)
 end

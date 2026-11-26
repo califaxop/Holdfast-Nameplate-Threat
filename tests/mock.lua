@@ -99,16 +99,18 @@ GetNumSubgroupMembers = function() return MOCK.members or 1 end
 GetNumGroupMembers = function() return (MOCK.members or 1) + 1 end
 UnitGroupRolesAssigned = function(u) if u == "player" then return MOCK.role end return (MOCK.roles or {})[u] or "NONE" end
 InCombatLockdown = function() return MOCK.combat or false end
-UnitDetailedThreatSituation = function(who)
-  local t = MOCK.threat[who]; if not t then return nil end
+-- threat on an enemy: MOCK.mobs[enemy unit][who] when set (several enemies), else MOCK.threat[who]
+local function T(who, mob) local m = MOCK.mobs and MOCK.mobs[mob]; return (m or MOCK.threat)[who] end
+UnitDetailedThreatSituation = function(who, mob)
+  local t = T(who, mob); if not t then return nil end
   return sec(t.tanking), sec(t.status), sec(t.pct or 50)
 end
-UnitThreatSituation = function(who)
-  local t = MOCK.threat[who]; if not t then return nil end
+UnitThreatSituation = function(who, mob)
+  local t = T(who, mob); if not t then return nil end
   return secState(t.status)
 end
-UnitThreatLeadSituation = function(who)
-  local t = MOCK.threat[who]; if not t or t.lead == nil then return nil end
+UnitThreatLeadSituation = function(who, mob)
+  local t = T(who, mob); if not t or t.lead == nil then return nil end
   return secState(t.lead)
 end
 GetThreatStatusColor = function() return 1, 0, 0 end

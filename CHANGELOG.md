@@ -1,5 +1,23 @@
 # Changelog
 
+## 6.0.0 (Milestone 6: diagnostics, validation, release)
+
+Everything from the test versions 5.1.0-5.4.0 below (milestones 2-5, never released on their
+own), plus:
+
+- `/hf status`: version, whose aggro and role (and what they resolve to now), glow style, %,
+  Warn at, alerts, overview, the nameplate adapters in use and which UI addons were found,
+  solo / party / raid, combat, and what the client lets addons do.
+- `/hf threat [unit]`: one enemy (your target by default): its state and confidence, who it's
+  on, every threat call's answer, and everyone's status on it.
+- `/hf profile [seconds]`: count Holdfast's work for that long (default 10 s) and report.
+- `/hf reset`: every setting back to its default, after `/hf reset yes`.
+- Fixed: the alerts' Test button showed "Lost aggro: Unknown"; the overview shows "other*" (not
+  "?*") for an enemy on someone outside your group, such as a totem; two overlapping labels in
+  the settings window.
+- Tests for a group without roles, a healer, several enemies at once and a recycled nameplate
+  (32 offline tests).
+
 ## 5.4.0 (Milestone 5: notifications, overview, customization)
 
 - Transition events (Events.lua): STATE_CHANGED, AGGRO_GAINED, AGGRO_LOST, PET_AGGRO_GAINED,

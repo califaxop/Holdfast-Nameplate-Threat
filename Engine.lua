@@ -2,7 +2,7 @@
 -- Registry -> State -> Renderer.
 local _, ns = ...
 local R, S, V = ns.Registry, ns.State, ns.Renderer
-local Scan
+local Scan, PrintPerf, ResetPerf, Status, Threat
 local PREVIEW_PCT = { secure = 45, unstable = 90, lost = 100 }
 local MODE_TEXT = { pet = "your pet's aggro", both = "you and your pet holding it", tanks = "the group's tanks holding it",
   dps = "you, not the tank", tank = "you, the tank" }
@@ -166,6 +166,79 @@ ev:SetScript("OnEvent", function(_, event, unit)
 end)
 
 ---------------------------------------------------------------------------
+-- Diagnostics
+---------------------------------------------------------------------------
+function PrintPerf()
+  local n = 0
+  for _ in R.Each() do n = n + 1 end
+  local made, shown, kinds = V.Counts()
+  local list = {}
+  for k, c in pairs(kinds) do list[#list + 1] = k .. " " .. c end
+  table.sort(list)
+  local c, A = V.counters, V.Anim
+  ns.Print(format("nameplates tracked %d | indicators made %d, showing %d (%s)", n, made, shown,
+    #list > 0 and table.concat(list, ", ") or "none"))
+  ns.Print(format("threat evaluations %d | redraws %d, unchanged %d | restyles %d", perf.evaluations, c.renders, c.skipped, c.styles))
+  ns.Print(format("update passes %d, average %.3f ms | moving glows animating %d, animation frames %d",
+    perf.passes, perf.passes > 0 and perf.time / perf.passes or 0, A.n, A.ticks))
+  ns.Print("safety check: " .. (net and format("every second in combat (%d so far)", perf.checks) or "off (out of combat)")
+    .. "  -  /hf perf reset to start counting again")
+end
+function ResetPerf()
+  local c, A = V.counters, V.Anim
+  perf.evaluations, perf.passes, perf.time, perf.checks = 0, 0, 0, 0
+  c.renders, c.skipped, c.styles, A.ticks = 0, 0, 0, 0
+end
+
+-- /hf status: the version, what Holdfast follows and why, the settings that matter, the
+-- nameplate addons found, and what this client lets addons do
+local function yes(v) return v and "yes" or "no" end
+function Status()
+  local db = ns.db
+  local get = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+  local ver = get and get(ns.name, "Version") or "?"
+  local mode, f = S.Mode(), S.Followed()
+  ns.Print(format("version %s | whose aggro: %s | my role: %s (now %s) | glows: %s | following: %s", ver,
+    db.tank or "auto", db.role or "auto", S.Role() or "not set", MODE_TEXT[mode] or mode,
+    #f > 0 and table.concat(f, ", ") or "nobody (no pet out)"))
+  local a = db.alerts
+  ns.Print(format("glow style: %s | threat %%: %s | warn at: %d%% | only in a group: %s | alerts: %s%s%s | overview: %s (%s)",
+    db.glowStyle or "auto", db.showPercent and "on" or "off", db.warnAt or 80, yes(db.onlyInGroup),
+    (a.sound or a.screen) and ((a.sound and "sound " or "") .. (a.screen and "message " or "")) or "off",
+    (a.sound or a.screen) and (a.onLost and "on red" or "") or "", (a.sound or a.screen) and a.onUnstable and ", orange" or "",
+    ns.Overview.IsShown() and "shown" or "off", db.overview.filter))
+  local _, _, kinds = V.Counts()
+  local list = {}
+  for k, c in pairs(kinds) do list[#list + 1] = k .. " " .. c end
+  ns.Print(format("nameplates: %s | EllesmereUI plates: %s | FlareUI plates: %s",
+    #list > 0 and table.concat(list, ", ") or "none showing",
+    yes(type(_G.EllesmereNameplates_NS) == "table"), yes(type(FlareUI) == "table" and type(FlareUI.Nameplates) == "table")))
+  ns.Print(format("%s, %s | hidden answers drive the glows: %s | the game's secret checks: %s | replace the game's flare: %s",
+    IsInRaid() and "in a raid" or IsInGroup() and "in a party" or "solo",
+    InCombatLockdown() and "in combat" or "out of combat", yes(V.HasSecretSupport()), yes(C_Secrets ~= nil),
+    yes(db.replaceGameHighlight)))
+end
+
+-- /hf threat [unit]: everything known about one enemy (your target by default): its state, who
+-- it's on, and every group member's threat status on it (a number, nil, <hidden> or error)
+function Threat(unit)
+  if not UnitExists(unit) then ns.Print("no " .. unit .. " (target an enemy, or name a unit: /hf threat focus)"); return end
+  local st
+  for u in R.Each() do
+    local ok, is = pcall(UnitIsUnit, u, unit)
+    if ok and not ns.isSecret(is) and is then st = S.Get(u); break end
+  end
+  ns.Print(unit .. ": " .. (st and (st.kind .. " (" .. (st.confidence or "?") .. ") | " .. Owner(st)) or "no nameplate (state not tracked)"))
+  ns.Print("  " .. ThreatLine(unit))
+  local list = {}
+  for _, u in ipairs(S.Everyone()) do
+    local ok, v = pcall(UnitThreatSituation, u, unit)
+    list[#list + 1] = u .. "=" .. (not ok and "error" or ns.isSecret(v) and "<hidden>" or tostring(v))
+  end
+  ns.Print("  everyone's status: " .. table.concat(list, " "))
+end
+
+---------------------------------------------------------------------------
 -- Slash commands
 ---------------------------------------------------------------------------
 local TOGGLES = { icon = "showIcon" }
@@ -272,29 +345,34 @@ SlashCmdList.HOLDFAST = function(msg)
     end
     return
   elseif cmd == "perf" then
-    local n = 0
-    for _ in R.Each() do n = n + 1 end
-    local made, shown, kinds = V.Counts()
-    local list = {}
-    for k, c in pairs(kinds) do list[#list + 1] = k .. " " .. c end
-    table.sort(list)
-    local c, A = V.counters, V.Anim
-    ns.Print(format("nameplates tracked %d | indicators made %d, showing %d (%s)", n, made, shown,
-      #list > 0 and table.concat(list, ", ") or "none"))
-    ns.Print(format("threat evaluations %d | redraws %d, unchanged %d | restyles %d", perf.evaluations, c.renders, c.skipped, c.styles))
-    ns.Print(format("update passes %d, average %.3f ms | moving glows animating %d, animation frames %d",
-      perf.passes, perf.passes > 0 and perf.time / perf.passes or 0, A.n, A.ticks))
-    ns.Print("safety check: " .. (net and format("every second in combat (%d so far)", perf.checks) or "off (out of combat)")
-      .. "  -  /hf perf reset to start counting again")
-    if arg == "reset" then
-      perf.evaluations, perf.passes, perf.time, perf.checks = 0, 0, 0, 0
-      c.renders, c.skipped, c.styles, A.ticks = 0, 0, 0, 0
-      ns.Print("counters reset")
-    end
+    PrintPerf()
+    if arg == "reset" then ResetPerf(); ns.Print("counters reset") end
     return
+  elseif cmd == "profile" then
+    -- /hf profile [seconds]: count from now, and report after that long (default 10 s)
+    local secs = tonumber(arg) or 10
+    secs = math.max(2, math.min(120, secs))
+    ResetPerf()
+    ns.Print(format("profiling for %d s: fight as usual...", secs))
+    C_Timer.After(secs, function() ns.Print(format("profile of the last %d s:", secs)); PrintPerf() end)
+    return
+  elseif cmd == "status" then
+    Status()
+    return
+  elseif cmd == "threat" then
+    Threat(arg ~= "" and arg or "target")
+    return
+  elseif cmd == "reset" then
+    if arg ~= "yes" then ns.Print("this puts every Holdfast setting back to its default. Type |cffffff00/hf reset yes|r to do it."); return end
+    ns.ResetDB()
+    if ns.Overview.IsShown() then ns.Overview.Show(false) end
+    if ns.UI and ns.UI.Restyle then ns.UI.Restyle() end
+    V.Rebuild()
+    ns.Print("settings reset to the defaults.")
   else
     if cmd ~= "help" then ns.Print("unknown command \"" .. cmd .. "\". The commands:") end
-    ns.Print("/hf (settings)  -  /hf overview [all | unstable | lost | me | others]  -  /hf icon | aggro  -  /hf debug  -  /hf scan  -  /hf perf  -  /hf tank")
+    ns.Print("/hf (settings)  -  /hf overview [all | unstable | lost | me | others]  -  /hf icon | aggro")
+    ns.Print("diagnostics: /hf status  -  /hf threat [unit]  -  /hf scan  -  /hf debug  -  /hf perf [reset]  -  /hf profile [seconds]  -  /hf reset  -  /hf tank | tip (probes)")
     return
   end
   ns.lookGen = (ns.lookGen or 0) + 1 -- (a setting changed: every plate restyles)

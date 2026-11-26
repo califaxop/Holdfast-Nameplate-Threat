@@ -94,7 +94,7 @@ local function BuildPanel(panel)
       { "both", "Me and my pet" }, { "tanks", "The group's tanks (for healers)" } },
     { function() return ns.db.tank or "auto" end, function(v) ns.db.tank = v end }, Changed,
     "Click, or use the arrows, to change it."), 26, -84))
-  local n1 = at(UI.Text(panel, "note", "Auto: your pet when it's out and no role is set, else you, as your role says. Me and my pet: either holding it is good. The group's tanks: any tank holding it is good."), 26, -112)
+  local n1 = at(UI.Text(panel, "note", "Auto: your pet when it's out and no role is set, else you. Me and my pet, the group's tanks: any of them holding it is good."), 26, -112)
   n1:SetWidth(W_)
 
   -- My role --------------------------------------------------------------------
@@ -201,7 +201,7 @@ local function BuildPanel(panel)
   local pn = at(UI.Text(panel, "note", "Not the tank: your threat, as a % of what pulls it. The tank: the closest other's. In groups the game hides the number from addons; Holdfast lets the game draw it."), 50, y - 66)
   pn:SetWidth(W_ - 24)
   y = y - 104
-  track(at(UI.Slider(panel, "Warn at (orange from this % of pulling it)", 300, 50, 100, 5, S("warnAt"),
+  track(at(UI.Slider(panel, "Warn at (% of pulling it)", 300, 50, 100, 5, S("warnAt"),
     function(v) return v .. "%" end, Changed, 1), 26, y))
   local wn = at(UI.Text(panel, "note", "Used where the game lets addons read threat % (mostly solo). In groups, orange follows the game's own \"closing in\" and \"about to pull\" states."), 26, y - 40)
   wn:SetWidth(W_)
