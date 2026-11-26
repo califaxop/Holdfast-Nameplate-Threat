@@ -231,5 +231,8 @@ or chat output). The next milestone starts only once those results are in.
   (`status=3 lead=3`) from the readable state. `status=3` with `lead=3` ("not first") at the same
   moment contradicts the docs; the lead may lag the status by an update. Holdfast treats only lead
   1–2 as unstable, so this reads as secure.
-- Not measured yet: a hidden % drawn with `SetFormattedText` (docs allow it), orange in a party,
-  and raids.
+- 5.1.0 in a party, as the tank: orange seen. lost → unstable (`status=2 lead=1`: on you, someone
+  has more threat), unstable → secure (`status=3 lead=0`), secure → lost (`status=1 lead=3`: you
+  have the most threat but it's attacking someone else).
+- Not measured yet: a hidden % drawn with `SetFormattedText` (docs allow it), not the tank in a
+  party, and raids.
