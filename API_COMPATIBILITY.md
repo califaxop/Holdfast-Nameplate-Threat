@@ -47,7 +47,7 @@ when the unit would pull. Milestone 2 must check this in game before relying on 
 | `issecretvalue` | `(value) -> bool` | Holdfast wraps it as `ns.isSecret`; `ns.Readable(v)` = not nil and not secret. Falls back to "never secret" on a client without it | Docs; used in game since 3.x |
 | `Frame:SetAlphaFromBoolean` | `(value, alphaIfTrue = 1, alphaIfFalse = 0)` | Accepts a secret boolean from addons (`SecretArguments = AllowedWhenTainted`). How hidden `isTanking` drives the glows | **Verified in game** (the glows switch in party combat) |
 | `Region:SetVertexColorFromBoolean` | `(value, colorIfTrue, colorIfFalse)` | Accepts a secret boolean | Docs; not used yet |
-| `FontString:SetFormattedText` / `SetText` | `(format, ...)` / `(text)` | Accept secret arguments from addons (`AllowedWhenTainted`); the game draws the text. How a hidden threat % is shown | Docs; **not yet seen in game** (5.1.0, Milestone 2 → 3 step 5) |
+| `FontString:SetFormattedText` / `SetText` | `(format, ...)` / `(text)` | Accept secret arguments from addons (`AllowedWhenTainted`); the game draws the text. How a hidden threat % is shown | **Verified in game:** a hidden threat % is drawn (5.1.0, in a party) |
 
 ## Units and groups
 

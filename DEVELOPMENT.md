@@ -10,7 +10,7 @@ isn't, and tracks the milestone plan. API facts and their verification status li
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Audit and stabilize the existing implementation | Done in 5.0.2, validated in game (step 5, the flare given back, still to see) |
-| 2 | Threat classification and percentage engine | **Done in 5.1.0, waiting for in-game validation** |
+| 2 | Threat classification and percentage engine | Done in 5.1.0, validated in game (tank: all three states; not the tank: the hidden %). Orange as not the tank and "Warn at" solo still to see |
 | 3 | Multi-unit ownership and pet tracking | Not started |
 | 4 | Rendering and performance improvements | Not started |
 | 5 | Notifications, overview and customization | Not started |
@@ -234,5 +234,6 @@ or chat output). The next milestone starts only once those results are in.
 - 5.1.0 in a party, as the tank: orange seen. lost → unstable (`status=2 lead=1`: on you, someone
   has more threat), unstable → secure (`status=3 lead=0`), secure → lost (`status=1 lead=3`: you
   have the most threat but it's attacking someone else).
-- Not measured yet: a hidden % drawn with `SetFormattedText` (docs allow it), not the tank in a
-  party, and raids.
+- 5.1.0 in a party, not the tank: the hidden % **is drawn by the game** (`SetFormattedText` with a
+  hidden value: "24%", "3%" beside the plates, in the safe colour), `secret: values=true`.
+- Not measured yet: orange as not the tank in a party (`status=1`), "Warn at" solo, and raids.
