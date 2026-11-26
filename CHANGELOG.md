@@ -1,5 +1,20 @@
 # Changelog
 
+## 5.2.0 (Milestone 3: who it's attacking, and pet tracking)
+
+- Ownership: each enemy's state says who it's attacking - you, your pet, a group tank, another
+  member, a member's pet - from whoever has threat status 2-3 (observed), or "unknown" when
+  nobody in your group does (inferred: someone outside it, a guardian, or hidden).
+- "Whose aggro" modes: Me, My pet, **Me and my pet**, **The group's tanks** (every group-finder
+  tank; with no tank roles set, you), and Auto.
+- The group (members, their pets, their tank roles) is looked up once when it changes
+  (roster, roles, pets, loading screens), not on every update; you're no longer asked about twice
+  in a raid.
+- Your pet: summoned, dismissed, died or replaced, the glows follow at once (`UNIT_PET`).
+- `/hf debug` and `/hf scan` say who each enemy is on.
+- Guardians and summons other than your pet can't be asked about by addons (no unit token):
+  an enemy on one shows as "unknown".
+
 ## 5.1.0 (Milestone 2: classification and percentage)
 
 - Three states: secure (green), unstable (orange), lost (red with "!"), plus hidden, none and

@@ -11,12 +11,12 @@ isn't, and tracks the milestone plan. API facts and their verification status li
 |---|---|---|
 | 1 | Audit and stabilize the existing implementation | Done in 5.0.2, validated in game (step 5, the flare given back, still to see) |
 | 2 | Threat classification and percentage engine | Done in 5.1.0, validated in game (tank: all three states; not the tank: the hidden %). Orange as not the tank and "Warn at" solo still to see |
-| 3 | Multi-unit ownership and pet tracking | Not started |
+| 3 | Multi-unit ownership and pet tracking | **Done in 5.2.0, waiting for in-game validation** |
 | 4 | Rendering and performance improvements | Not started |
 | 5 | Notifications, overview and customization | Not started |
 | 6 | Diagnostics, validation and release preparation | Not started |
 
-## Architecture (as it actually runs, 5.1.0)
+## Architecture (as it actually runs, 5.2.0)
 
 Load order (Holdfast.toc): Core → UnitRegistry → ThreatState → Renderer → UI → Options → Engine.
 Every file shares the addon namespace `ns`.
@@ -48,27 +48,33 @@ Every file shares the addon namespace `ns`.
 ### Threat evaluation (ThreatState.lua, `Evaluate`)
 
 - No unit, can't attack, or dead → `none`.
-- Mode (`State.Mode`): `pet` (follow your pet), `tank` (you, as the tank) or `dps` (you, not the
-  tank), from the "Whose aggro" and "My role" settings. "My pet" with no pet out → `none`.
-- Engaged: is the followed unit, you, your pet or anyone in your group on the enemy's threat list
-  (`UnitThreatSituation` non-nil)? If every answer is hidden, it counts as engaged while the enemy
-  is in combat.
+- Mode (`State.Mode`), from "Whose aggro" and "My role": `pet` (your pet), `both` (you and your
+  pet), `tanks` (the group's tanks, for healers), `tank` (you, as the tank) or `dps` (you, not the
+  tank). `State.Followed` gives the units whose holding it counts: one, two (you and your pet) or
+  every group tank (group-finder role; none set → you). "My pet" with no pet out → `none`.
+- Roster: your group members and their pets (`partyN` / `partypetN`, `raidN` / `raidpetN`, without
+  you and your own pet), with each member's tank role, cached until `GROUP_ROSTER_UPDATE`,
+  `PLAYER_ROLES_ASSIGNED`, `UNIT_PET` or a loading screen.
+- One pass per enemy over everyone (you, your pet, the roster): each one's
+  `UnitThreatSituation`. Engaged: any readable answer (or, if every answer is hidden, the enemy is
+  in combat). Who it's attacking: the one with status 2–3 (observed); nobody of yours →
+  `unknown` (inferred: someone outside the group, a guardian, or hidden).
 - The game hides two things separately (measured in a party, Nov 2026): the threat **state**
   (`UnitThreatSituation` status 0–3, `UnitThreatLeadSituation` 0–3) stays readable; the threat
   **values** (`UnitDetailedThreatSituation`: isTanking, %) are hidden.
 - State hidden too → `hidden`: the hidden `isTanking` goes to the renderer, which switches the
   glows with it (two states, as in 5.0).
-- State readable (on the followed unit = status 2 or 3):
-  - **Tank / pet:** not on it → `lost`; on it with status 2 (someone has more threat), or lead
-    1–2 (someone closing in), or (values readable) anyone else at "Warn at" or more → `unstable`;
-    else `secure`. The % is the closest other's (only when readable: hidden values can't be
+- State readable:
+  - **Tank / pet / you and your pet / the group's tanks:** held by none of the followed → `lost`;
+    held by one with status 2 (someone has more threat), or lead 1–2 (someone closing in), or
+    (values readable) anyone else at "Warn at" or more → `unstable`; else `secure`. The % is the closest other's (only when readable: hidden values can't be
     compared to find the highest).
   - **Not the tank:** on you → `lost`; status 1 (above the tank, not yet pulling) or (values
     readable) your % at "Warn at" or more → `unstable`; else `secure`. The % is yours (hidden or
     not: a hidden one is drawn by the game).
-- Each state also carries `ownership` ("followed", or "other": inferred, the game only says it
-  isn't the followed unit), `status`, `lead`, `percentage` and `confidence` ("values", "state",
-  "hidden", "none"). See the comment above `Evaluate`.
+- Each state also carries `ownership` ("player", "pet", "tank", "member", "member pet",
+  "unknown"), `ownerUnit`, `ownerObserved`, `status`, `lead`, `percentage` and `confidence`
+  ("values", "state", "hidden", "none"). See the comment above `Evaluate`.
 - Pull threshold: not applied by Holdfast. The game's scaled % is already a % of what pulls it
   (110% of the tank's threat in melee range, 130% at range, in Classic); not yet verified on
   Forever.
@@ -101,8 +107,9 @@ Every file shares the addon namespace `ns`.
 | Preview on your target | Working |
 | Unstable (someone close to taking it / you close to pulling it) | 5.1.0: from the game's states in groups, plus "Warn at" where % is readable |
 | Threat % | 5.1.0: optional; readable shown capped at 100, hidden drawn by the game |
-| Ownership beyond "on the followed unit or not" | Not implemented. Milestone 3 |
-| Guardians / summons other than `pet` | Not implemented. Milestone 3 |
+| Ownership: you, your pet, a group tank, a member, a member's pet, unknown | 5.2.0 (observed from status 2–3; "unknown" is inferred) |
+| Tracking modes: me, my pet, me and my pet, the group's tanks | 5.2.0 |
+| Guardians and summons other than your `pet` | Not tracked: the game gives addons no unit token for them (only their nameplates, which are friendly units, not threat holders Holdfast can ask about). An enemy attacking one shows as "unknown" (inferred) |
 | Event-driven updates without the ticker | Partly (events + 0.25 s ticker). Milestone 4 |
 | Shared animation manager | Not implemented (one `OnUpdate` per visible pixel / autocast glow). Milestone 4 |
 | Transition events | One debug callback (`State.onTransition`). Milestone 5 |
@@ -216,6 +223,21 @@ or chat output). The next milestone starts only once those results are in.
    (this checks that a hidden % can be shown).
 6. Untick "Replace the game's aggro highlight" mid-fight: the game's flare comes back at once.
 7. Send screenshots of 4 and 5 (plate and chat), and any Lua errors.
+
+#### Milestone 3 → 4
+
+1. Install 5.2.0, `/reload`. In a party, as a damage dealer or healer, with `/hf debug` on.
+2. Each change line now says who it's attacking: `on tank (party2)`, `on member (party3)`,
+   `on member pet (partypet1)`, `on you`, `on your pet`, or `on unknown (inferred)`. Check a few
+   against what you see (the mob's target).
+3. Set "Whose aggro: The group's tanks": green while a tank holds it, orange when a tank is about
+   to lose it, red with "!" when it's on anyone else (you, a damage dealer, a healer).
+4. With a pet (if you have a pet class): "Whose aggro: Me and my pet". Green while either of you
+   holds it; dismiss or lose the pet mid-fight: it goes back to only you, no errors.
+5. `/hf scan` mid-fight once, in a group with roles set (dungeon finder, or roles set by the
+   leader). Send it, and screenshots of 2-4, and any Lua errors.
+6. Still open from Milestone 2: orange as not the tank (`status=1`), "Warn at" solo, and the game's
+   flare coming back when "Replace" is unticked.
 
 ## Known limitations (from earlier in-game tests)
 

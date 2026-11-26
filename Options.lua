@@ -89,10 +89,11 @@ local function BuildPanel(panel)
 
   -- Whose aggro ------------------------------------------------------------
   at(UI.Section(panel, "Choose whose aggro to show", W_), 26, -54)
-  track(at(UI.Selector(panel, 330, { { "auto", "Auto: my pet when it tanks, else me" }, { "me", "Me" }, { "pet", "My pet" } },
+  track(at(UI.Selector(panel, 330, { { "auto", "Auto: my pet when it tanks, else me" }, { "me", "Me" }, { "pet", "My pet" },
+      { "both", "Me and my pet" }, { "tanks", "The group's tanks (for healers)" } },
     { function() return ns.db.tank or "auto" end, function(v) ns.db.tank = v end }, Changed,
     "Click, or use the arrows, to change it."), 26, -84))
-  local n1 = at(UI.Text(panel, "note", "Auto follows your pet when it's out and no role is set (solo, or a group without roles); otherwise you, as your role below says."), 26, -112)
+  local n1 = at(UI.Text(panel, "note", "Auto: your pet when it's out and no role is set, else you, as your role says. Me and my pet: either holding it is good. The group's tanks: any tank holding it is good."), 26, -112)
   n1:SetWidth(W_)
 
   -- My role --------------------------------------------------------------------
@@ -119,6 +120,8 @@ local function BuildPanel(panel)
     if not ok then return "" end
     if mode == "dps" then return "In use: Not the tank" end
     if mode == "pet" then return "In use: Tank / solo (your pet)" end
+    if mode == "both" then return "In use: Tank / solo (you and your pet)" end
+    if mode == "tanks" then return "In use: Tank / solo (the group's tanks)" end
     local inGroup = IsInGroup and IsInGroup()
     return inGroup and "In use: Tank / solo (you tank)" or "In use: Tank / solo (solo)"
   end

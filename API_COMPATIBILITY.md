@@ -58,6 +58,13 @@ when the unit would pull. Milestone 2 must check this in game before relying on 
 | `UnitGroupRolesAssigned` | `(unit) -> "TANK" / "HEALER" / "DAMAGER" / "NONE"` | unit identity restricted | Guarded since 5.0.2 (hidden = no role) | Docs |
 | `IsInGroup`, `IsInRaid`, `GetNumGroupMembers`, `GetNumSubgroupMembers` | — | — | | Docs; used in game |
 
+## Group units
+
+| Token | Notes | Status |
+|---|---|---|
+| `partyN` / `partypetN` (N 1–4), `raidN` / `raidpetN` (N 1–40) | Group members and their pets, asked about with `UnitThreatSituation`. `raidN` includes you; skipped with `UnitIsUnit(token, "player")` | Docs (unit tokens); not yet seen in game with Holdfast 5.2.0 |
+| Guardians, totems, other summons | No unit token for addons (only their nameplates). Can't be asked about; an enemy on one shows as "unknown" | Docs: no token type for them |
+
 ## Nameplates
 
 | API / structure | Notes | Status |

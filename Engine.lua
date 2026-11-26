@@ -4,6 +4,9 @@ local _, ns = ...
 local R, S, V = ns.Registry, ns.State, ns.Renderer
 local Scan
 local PREVIEW_PCT = { secure = 45, unstable = 90, lost = 100 }
+local MODE_TEXT = { pet = "your pet's aggro", both = "you and your pet holding it", tanks = "the group's tanks holding it",
+  dps = "you, not the tank", tank = "you, the tank" }
+local ROSTER_EVENTS = { GROUP_ROSTER_UPDATE = true, PLAYER_ROLES_ASSIGNED = true, UNIT_PET = true }
 
 
 local function UpdateUnit(unit)
@@ -12,12 +15,13 @@ local function UpdateUnit(unit)
   local st = S.Update(unit)
   -- "Only show in a party or raid": solo, nothing glows (preview still works)
   -- (your pet tanking counts too: that's usually solo)
-  if ns.db.onlyInGroup and not IsInGroup() and S.Mode() ~= "pet" and not ns.preview then st = { kind = "none" } end
+  local m = S.Mode()
+  if ns.db.onlyInGroup and not IsInGroup() and m ~= "pet" and m ~= "both" and not ns.preview then st = { kind = "none" } end
   -- Preview mode: show a look ("secure", "unstable" or "lost", with a sample %) on your target's nameplate.
   if ns.preview then
     local isTarget = UnitIsUnit(unit, "target")
     if ns.Readable(isTarget) and isTarget then
-      st = { kind = ns.preview, dps = S.Mode() == "dps", percentage = PREVIEW_PCT[ns.preview] }
+      st = { kind = ns.preview, dps = m == "dps", percentage = PREVIEW_PCT[ns.preview] }
     end
   end
   V.Render(plate, st, unit)
@@ -58,18 +62,26 @@ local function ThreatLine(unit)
     .. " | secret: state=" .. probe(CS.ShouldUnitThreatStateBeSecret, who, unit)[1]
     .. " values=" .. probe(CS.ShouldUnitThreatValuesBeSecret, who, unit)[1]
 end
+-- who it's attacking: "on tank (party2)", "on you", or "on unknown (inferred)"
+local function Owner(st)
+  if not (st and st.ownership) then return "on ?" end
+  return "on " .. (st.ownership == "player" and "you" or st.ownership == "pet" and "your pet" or st.ownership)
+    .. (st.ownerUnit and st.ownerUnit ~= "player" and st.ownerUnit ~= "pet" and (" (" .. st.ownerUnit .. ")") or "")
+    .. (st.ownerObserved == false and " (inferred)" or "")
+end
 -- every tracked enemy now (/hf scan, and when /hf debug is turned on)
 Scan = function()
-  local tank, mode = S.TankUnit(), S.Mode()
-  ns.Print("following:", tank == "pet" and "your pet" or tank == "player" and "you" or "nobody (no pet out)",
-    "| glows:", mode == "pet" and "your pet's aggro" or mode == "dps" and "you, not the tank" or "you, the tank",
+  local mode = S.Mode()
+  local f = S.Followed(mode)
+  ns.Print("following:", #f == 0 and "nobody (no pet out)" or table.concat(f, ", "),
+    "| glows:", MODE_TEXT[mode] or mode,
     "| role:", S.Role() or "not set", "|", InCombatLockdown() and "in combat" or "out of combat",
     "|", IsInGroup() and "in a group" or "solo")
   local n = 0
   for unit in R.Each() do
     n = n + 1
     local st = S.Get(unit)
-    ns.Print(unit, "-> " .. (st and st.kind or "?") .. " (" .. (st and st.confidence or "?") .. ")", "|", ThreatLine(unit))
+    ns.Print(unit, "-> " .. (st and st.kind or "?") .. " (" .. (st and st.confidence or "?") .. ")", "|", Owner(st), "|", ThreatLine(unit))
   end
   ns.Print("nameplates tracked:", n, "| hidden answers drive the glows:",
     V.HasSecretSupport() and "yes" or "no (this client can't)")
@@ -77,7 +89,7 @@ end
 
 -- with /hf debug on: each change, with what the game answered at that moment
 S.onTransition = function(unit, old, new)
-  if ns.debug then ns.Dbg(unit, old.kind, "->", new.kind, "|", ThreatLine(unit)) end
+  if ns.debug then ns.Dbg(unit, old.kind, "->", new.kind, "|", Owner(new), "|", ThreatLine(unit)) end
 end
 
 local ev = CreateFrame("Frame")
@@ -103,8 +115,10 @@ ev:SetScript("OnEvent", function(_, event, unit)
   -- (any other token - "target", "focus", "boss1"... - falls through to one batched update of
   -- every plate: the event names the enemy by only one of its tokens, not always its nameplate's)
   elseif event == "PLAYER_ENTERING_WORLD" then
-    R.Scan(); UpdateAll()
+    S.RosterChanged(); R.Scan(); UpdateAll()
   else
+    -- the group, its roles or a pet changed (summoned, dismissed, died, replaced): look again
+    if ROSTER_EVENTS[event] then S.RosterChanged() end
     UpdateAllSoon()
   end
 end)

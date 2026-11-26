@@ -69,7 +69,7 @@ def _(L, ns):
 @test("states: a hidden group role is no role (no comparison on a hidden value)")
 def _(L, ns):
     lua(L, '''
-      NS.db.role = "auto"; MOCK.inGroup = true; MOCK.role = MOCK.Secret("TANK")
+      NS.db.role = "auto"; MOCK.Group(true); MOCK.role = MOCK.Secret("TANK")
       assert(NS.State.Role() == nil)
       MOCK.role = "DAMAGER"; assert(NS.State.Role() == "dps")
     ''')
@@ -89,23 +89,23 @@ def _(L, ns):
 @test("M2 tank, in a party (state readable, values hidden): holding / losing it / lost from the game's states")
 def _(L, ns):
     lua(L, '''
-      NS.db.role = "tank"; NS.db.tank = "me"; MOCK.inGroup = true; MOCK.hiddenValues = true
+      NS.db.role = "tank"; NS.db.tank = "me"; MOCK.Group(true); MOCK.hiddenValues = true
       MOCK.threat.player = { tanking = true, status = 3, lead = 0 }
       assert(MOCK.Look() == "secure aggro", MOCK.Look())
       local st = NS.State.Get("nameplate1")
-      assert(st.confidence == "state" and st.ownership == "followed" and st.lead == 0, st.confidence)
+      assert(st.confidence == "state" and st.ownership == "player" and st.ownerObserved and st.lead == 0, st.confidence)
       MOCK.threat.player.lead = 2; assert(MOCK.Look() == "unstable unstable", "someone closing in: " .. MOCK.Look())
       MOCK.threat.player = { tanking = true, status = 2, lead = 3 }; assert(MOCK.Look() == "unstable unstable", "someone has more: " .. MOCK.Look())
       MOCK.threat.player = { tanking = false, status = 0, lead = 3 }; MOCK.threat.party1 = { tanking = true, status = 3 }
       assert(MOCK.Look() == "lost nothreat!", MOCK.Look())
-      assert(NS.State.Get("nameplate1").ownership == "other")
+      assert(NS.State.Get("nameplate1").ownership == "member" and NS.State.Get("nameplate1").ownerUnit == "party1")
       MOCK.threat.player = nil; assert(MOCK.Look() == "lost nothreat!", "not on its list, on the group: " .. MOCK.Look())
     ''')
 
 @test("M2 not the tank, in a party: safe / close (status 1) / on you")
 def _(L, ns):
     lua(L, '''
-      NS.db.role = "dps"; MOCK.inGroup = true; MOCK.hiddenValues = true
+      NS.db.role = "dps"; MOCK.Group(true); MOCK.hiddenValues = true
       MOCK.threat.party1 = { tanking = true, status = 3 }
       MOCK.threat.player = { tanking = false, status = 0, pct = 85 }
       assert(MOCK.Look() == "secure aggro", "the % is hidden, so it can't warn from it: " .. MOCK.Look())
@@ -123,7 +123,7 @@ def _(L, ns):
       assert(NS.State.Get("nameplate1").confidence == "values")
       MOCK.threat.player.pct = 50; assert(MOCK.Look() == "secure aggro", MOCK.Look())
       NS.db.warnAt = 90; MOCK.threat.player.pct = 85; assert(MOCK.Look() == "secure aggro", MOCK.Look())
-      NS.db.role = "tank"; NS.db.warnAt = 80; MOCK.inGroup = true
+      NS.db.role = "tank"; NS.db.warnAt = 80; MOCK.Group(true)
       MOCK.threat.player = { tanking = true, status = 3, lead = 0, pct = 100 }
       MOCK.threat.party1 = { tanking = false, status = 1, pct = 92 }
       assert(MOCK.Look() == "unstable unstable", MOCK.Look())
@@ -139,7 +139,7 @@ def _(L, ns):
       local f = NS.Renderer.Indicator(MOCK.plate)
       assert(f.pct._color[1] == NS.db.colorsDps.unstable[1], "orange")
       MOCK.threat.player = { tanking = true, status = 3, pct = 130 }; MOCK.Look(); assert(MOCK.Pct() == "100%", MOCK.Pct())
-      MOCK.inGroup = true; MOCK.hiddenValues = true; MOCK.threat.player = { tanking = false, status = 0, pct = 40 }
+      MOCK.Group(true); MOCK.hiddenValues = true; MOCK.threat.player = { tanking = false, status = 0, pct = 40 }
       MOCK.Look(); assert(MOCK.Pct() == "<game>", "hidden: drawn by the game: " .. MOCK.Pct())
       MOCK.hidden = true; MOCK.Look(); assert(MOCK.Pct() == "<game>", "all hidden: still drawn by the game")
       NS.db.role = "tank"; MOCK.hidden = false; MOCK.threat.player = { tanking = true, status = 3, lead = 0 }
@@ -153,6 +153,68 @@ def _(L, ns):
       NS.db.showPercent = true; NS.preview = "unstable"
       assert(MOCK.Look():find("unstable$"), MOCK.Look())
       assert(MOCK.Pct() == "90%", MOCK.Pct())
+    ''')
+
+@test("M3 who it's attacking: you, your pet, a group tank, a member, a member's pet, or unknown")
+def _(L, ns):
+    lua(L, '''
+      NS.db.role = "dps"; MOCK.hiddenValues = true; MOCK.roles = { party1 = "TANK" }; MOCK.Group(true)
+      local function owner() MOCK.Look(); local st = NS.State.Get("nameplate1"); return st.ownership, st.ownerUnit, st.ownerObserved end
+      MOCK.threat = { party1 = { status = 3 }, player = { status = 0 } }
+      local o, u, seen = owner(); assert(o == "tank" and u == "party1" and seen, tostring(o))
+      MOCK.threat = { partypet1 = { status = 3 }, player = { status = 0 } }
+      o, u = owner(); assert(o == "member pet" and u == "partypet1", tostring(o))
+      MOCK.roles = {}; MOCK.Group(true); MOCK.threat = { party1 = { status = 2 }, player = { status = 1 } }
+      o = owner(); assert(o == "member", tostring(o))
+      MOCK.threat = { player = { status = 3 } }; o = owner(); assert(o == "player", tostring(o))
+      MOCK.threat = { player = { status = 0 } }; o, u, seen = owner()
+      assert(o == "unknown" and u == nil and seen == false, "nobody of yours: inferred unknown")
+    ''')
+
+@test("M3 the group's tanks (healers): any tank holding it is good; two tanks; a member holding it is lost")
+def _(L, ns):
+    lua(L, '''
+      NS.db.role = "dps"; NS.db.tank = "tanks"; MOCK.hiddenValues = true; MOCK.members = 3
+      MOCK.roles = { party1 = "TANK", party2 = "TANK" }; MOCK.Group(true)
+      assert(table.concat(NS.State.Followed(), ",") == "party1,party2")
+      MOCK.threat = { party1 = { status = 3, lead = 0 }, player = { status = 0 } }
+      assert(MOCK.Look() == "secure aggro", MOCK.Look())
+      local st = NS.State.Get("nameplate1"); assert(st.dps == false and st.tank == "party1")
+      MOCK.threat.party1.lead = 2; assert(MOCK.Look() == "unstable unstable", MOCK.Look())
+      MOCK.threat = { party2 = { status = 3, lead = 0 } }; assert(MOCK.Look() == "secure aggro", "the other tank: " .. MOCK.Look())
+      MOCK.threat = { party3 = { status = 3 }, party1 = { status = 0 } }; assert(MOCK.Look() == "lost nothreat!", MOCK.Look())
+      MOCK.roles = {}; MOCK.Group(true); NS.db.role = "tank"
+      assert(table.concat(NS.State.Followed(), ",") == "player", "no tank roles: you")
+    ''')
+
+@test("M3 me and my pet: either holding it is good; the pet dies, then only you")
+def _(L, ns):
+    lua(L, '''
+      NS.db.tank = "both"; MOCK.pet = true; MOCK.Fire("UNIT_PET", "player"); MOCK.RunTimers()
+      MOCK.threat = { pet = { status = 3, lead = 0 }, player = { status = 0 } }
+      assert(MOCK.Look() == "secure aggro", MOCK.Look())
+      MOCK.threat.pet.lead = 1; assert(MOCK.Look() == "unstable unstable", MOCK.Look())
+      MOCK.threat = { player = { status = 3, lead = 0 }, pet = { status = 0 } }; assert(MOCK.Look() == "secure aggro", MOCK.Look())
+      MOCK.petDead = true; MOCK.threat = { pet = { status = 3 }, player = { status = 0 } }
+      assert(table.concat(NS.State.Followed(), ",") == "player")
+      assert(MOCK.Look() == "lost nothreat!", "a dead pet doesn't count: " .. MOCK.Look())
+    ''')
+
+@test("M3 raids: you aren't counted twice (raidN includes you); the roster refreshes on roster events only")
+def _(L, ns):
+    lua(L, '''
+      MOCK.raid = true; MOCK.members = 3
+      MOCK.same = function(a, b) return a == "raid1" and b == "player" end
+      MOCK.Group(true); NS.db.role = "tank"
+      MOCK.threat = { player = { status = 3, lead = 0 }, raid1 = { status = 3 } }
+      MOCK.Look(); local st = NS.State.Get("nameplate1")
+      assert(st.ownership == "player", "raid1 is you: " .. tostring(st.ownership))
+      local calls = 0
+      local real = UnitExists
+      UnitExists = function(u) calls = calls + 1; return real(u) end
+      MOCK.Look(); MOCK.Look()
+      UnitExists = real
+      assert(calls < 20, "the roster isn't rebuilt on every update: " .. calls .. " UnitExists calls")
     ''')
 
 @test("renderer: a host switch (EllesmereUI plate shows late) reuses indicators, no new frames")
@@ -255,7 +317,7 @@ def _(L, ns):
       -- with debug on, each change prints the same line, at that moment
       PRINTS = {}; MOCK.hidden = false; MOCK.threat.player = { tanking = false, status = 0 }; NS.db.role = "tank"; MOCK.Look()
       all = table.concat(PRINTS, "\\n")
-      assert(all:find("hidden %-> lost | on you=false status=0"), all)
+      assert(all:find("hidden %-> lost | on .- | on you=false status=0"), all)
     ''')
 
 @test("settings window: a shrunk shared font (EllesmereUI's tracker) isn't used; no style settings: EllesmereUI's look on its own")

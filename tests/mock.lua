@@ -79,13 +79,14 @@ UnitExists = function(u) if u == "pet" then return MOCK.pet end return true end
 UnitIsDead = function(u) if u == "pet" then return MOCK.petDead end return false end
 UnitCanAttack = function() return true end
 UnitAffectingCombat = function() return true end
-UnitIsUnit = function() return false end
+UnitIsUnit = function(a, b) return MOCK.same and MOCK.same(a, b) or false end
 UnitName = function() return "Mob" end
 IsInGroup = function() return MOCK.inGroup end
-IsInRaid = function() return false end
-GetNumSubgroupMembers = function() return 1 end
-GetNumGroupMembers = function() return 2 end
-UnitGroupRolesAssigned = function() return MOCK.role end
+-- the group: MOCK.members others (party1..), MOCK.raid for a raid (raid1 is you), MOCK.roles[unit]
+IsInRaid = function() return MOCK.raid or false end
+GetNumSubgroupMembers = function() return MOCK.members or 1 end
+GetNumGroupMembers = function() return (MOCK.members or 1) + 1 end
+UnitGroupRolesAssigned = function(u) if u == "player" then return MOCK.role end return (MOCK.roles or {})[u] or "NONE" end
 InCombatLockdown = function() return false end
 UnitDetailedThreatSituation = function(who)
   local t = MOCK.threat[who]; if not t then return nil end
@@ -103,6 +104,8 @@ GetThreatStatusColor = function() return 1, 0, 0 end
 
 -- the rest --------------------------------------------------------------------------------
 C_Timer = { NewTicker = function() end, After = function(_, fn) MOCK.timers[#MOCK.timers + 1] = fn end }
+-- join or leave a group (the game sends GROUP_ROSTER_UPDATE, which refreshes Holdfast's roster)
+function MOCK.Group(on) MOCK.inGroup = on; MOCK.Fire("GROUP_ROSTER_UPDATE"); MOCK.RunTimers() end
 function MOCK.RunTimers() local t = MOCK.timers; MOCK.timers = {}; for _, fn in ipairs(t) do fn() end end
 format = string.format; tinsert = table.insert; strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
