@@ -98,7 +98,7 @@ when the unit would pull. Milestone 2 must check this in game before relying on 
 
 ## Testing an API in game
 
-- `/hf debug` (then again to stop): per enemy, the followed unit's `isTanking` (`on you=`),
+- `/hf scan` (any time), and `/hf debug` (on: the same, then again at every state change): per enemy, the followed unit's `isTanking` (`on you=`),
   `status=`, `lead=`, `pct=`, `ofLead=`, and `secret: state= values=`. Each shows a value,
   `nil`, `<hidden>`, `error` (the call failed) or `n/a` (not in this client).
 - `/hf tank`: probes on your target, including `SetAlphaFromBoolean` with the status.

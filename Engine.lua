@@ -2,6 +2,7 @@
 -- Registry -> State -> Renderer.
 local _, ns = ...
 local R, S, V = ns.Registry, ns.State, ns.Renderer
+local Scan
 
 
 local function UpdateUnit(unit)
@@ -32,8 +33,48 @@ local function UpdateAllSoon()
   C_Timer.After(0, function() queued = false; UpdateAll() end)
 end
 
+-- Diagnostics: what the game's threat calls answer for one enemy, each as a value, nil, <hidden>,
+-- error (the call failed) or n/a (not in this client). Nothing hidden is read; it only says so.
+local function show(v) return ns.isSecret(v) and "<hidden>" or tostring(v) end
+local function probe(fn, ...)
+  if type(fn) ~= "function" then return { "n/a" } end
+  local r = { pcall(fn, ...) }
+  if not r[1] then return { "error" } end
+  local out = {}
+  for i = 2, math.max(2, #r) do out[#out + 1] = show(r[i]) end
+  return out
+end
+local function ThreatLine(unit)
+  local who = S.TankUnit() or "player"
+  local CS = C_Secrets or {}
+  local d = probe(UnitDetailedThreatSituation, who, unit)
+  return "on " .. (who == "pet" and "your pet" or "you") .. "=" .. d[1]
+    .. " status=" .. probe(UnitThreatSituation, who, unit)[1]
+    .. " lead=" .. probe(UnitThreatLeadSituation, who, unit)[1]
+    .. " pct=" .. (d[3] or d[1]) .. " ofLead=" .. probe(UnitThreatPercentageOfLead, who, unit)[1]
+    .. " | secret: state=" .. probe(CS.ShouldUnitThreatStateBeSecret, who, unit)[1]
+    .. " values=" .. probe(CS.ShouldUnitThreatValuesBeSecret, who, unit)[1]
+end
+-- every tracked enemy now (/hf scan, and when /hf debug is turned on)
+Scan = function()
+  local tank, mode = S.TankUnit(), S.Mode()
+  ns.Print("following:", tank == "pet" and "your pet" or tank == "player" and "you" or "nobody (no pet out)",
+    "| glows:", mode == "pet" and "your pet's aggro" or mode == "dps" and "you, not the tank" or "you, the tank",
+    "| role:", S.Role() or "not set", "|", InCombatLockdown() and "in combat" or "out of combat",
+    "|", IsInGroup() and "in a group" or "solo")
+  local n = 0
+  for unit in R.Each() do
+    n = n + 1
+    local st = S.Get(unit)
+    ns.Print(unit, "-> " .. (st and st.kind or "?"), "|", ThreatLine(unit))
+  end
+  ns.Print("nameplates tracked:", n, "| hidden answers drive the glows:",
+    V.HasSecretSupport() and "yes" or "no (this client can't)")
+end
+
+-- with /hf debug on: each change, with what the game answered at that moment
 S.onTransition = function(unit, old, new)
-  ns.Dbg(unit, old.kind, "->", new.kind)
+  if ns.debug then ns.Dbg(unit, old.kind, "->", new.kind, "|", ThreatLine(unit)) end
 end
 
 local ev = CreateFrame("Frame")
@@ -156,43 +197,11 @@ SlashCmdList.HOLDFAST = function(msg)
   elseif cmd == "debug" then
     ns.debug = not ns.debug
     ns.Print("debug " .. (ns.debug and "ON" or "OFF"))
-    if ns.debug then
-      local function show(v) return ns.isSecret(v) and "<hidden>" or tostring(v) end
-      local n = 0
-      local tank = S.TankUnit()
-      local mode = S.Mode()
-      ns.Dbg("following:", tank == "pet" and "your pet" or tank == "player" and "you" or "nobody (no pet out)",
-        "| glows:", mode == "pet" and "your pet's aggro" or mode == "dps" and "you, not the tank" or "you, the tank",
-        "| role:", S.Role(true) or "not set")
-      -- each value as the game gives it: a number / true / false, nil, <hidden>, error, or n/a
-      -- (the call isn't in this client). Nothing hidden is read; this only says it's hidden.
-      local function probe(fn, ...)
-        if type(fn) ~= "function" then return { "n/a" } end
-        local r = { pcall(fn, ...) }
-        if not r[1] then return { "error" } end
-        local out = {}
-        for i = 2, math.max(2, #r) do out[#out + 1] = show(r[i]) end
-        return out
-      end
-      local CS = C_Secrets or {}
-      local who = tank or "player"
-      for unit in R.Each() do
-        n = n + 1
-        local st = S.Get(unit)
-        local d = probe(UnitDetailedThreatSituation, who, unit)
-        ns.Dbg(unit, "-> " .. (st and st.kind or "?"),
-          "| on " .. (who == "pet" and "your pet" or "you") .. "=" .. d[1],
-          "status=" .. probe(UnitThreatSituation, who, unit)[1],
-          "lead=" .. probe(UnitThreatLeadSituation, who, unit)[1],
-          "pct=" .. (d[3] or d[1]) .. " ofLead=" .. probe(UnitThreatPercentageOfLead, who, unit)[1],
-          "| secret: state=" .. probe(CS.ShouldUnitThreatStateBeSecret, who, unit)[1]
-            .. " values=" .. probe(CS.ShouldUnitThreatValuesBeSecret, who, unit)[1])
-      end
-      ns.Dbg("nameplates tracked:", n, "| hidden answers drive the glows:",
-        V.HasSecretSupport() and "yes" or "no (this client can't)")
-    end
+    if ns.debug then Scan() end
+  elseif cmd == "scan" then
+    Scan()
   else
-    ns.Print("/hf (settings)  -  /hf icon | aggro  -  /hf debug  -  /hf tank")
+    ns.Print("/hf (settings)  -  /hf icon | aggro  -  /hf debug  -  /hf scan  -  /hf tank")
     return
   end
   UpdateAll()

@@ -95,7 +95,7 @@ The status, scaled %, raw % and raw threat it also returns are not used, nor are
 | Shared animation manager | Not implemented (one `OnUpdate` per visible pixel / autocast glow). Milestone 4 |
 | Transition events | One debug callback (`State.onTransition`). Milestone 5 |
 | Overview window, notifications | Not implemented. Milestone 5 |
-| Diagnostics | `/hf debug` (per-enemy threat calls, value / nil / hidden / error / n/a), `/hf tank`, `/hf tip` probes. Milestone 6 adds scan, status, perf, profile, reset |
+| Diagnostics | `/hf debug` (per-enemy threat calls, value / nil / hidden / error / n/a, at every state change), `/hf scan`, `/hf tank`, `/hf tip` probes. Milestone 6 adds status, perf, profile, reset |
 | Tests | `tests/run_tests.py` (logic only, on a mock client). Milestone 6 widens them |
 
 ## Milestone 1 audit (5.0.1 source)
@@ -184,8 +184,8 @@ or chat output). The next milestone starts only once those results are in.
 4. Change the glow style several times, then fight: glows still right, no Lua errors.
 5. Untick "Replace the game's aggro highlight" mid-fight in a party: the game's flare comes back
    at once on enemies that have it.
-6. In a party, in combat, type `/hf debug` (and again to turn it off) and send the chat. Each
-   enemy line shows `status=`, `lead=`, `pct=`, `ofLead=` and `secret: state= values=`. This is
+6. In a party, with `/hf debug` on, fight: each state change prints the enemy's line (or type
+   `/hf scan` mid-fight for every enemy). Send the chat. Each enemy line shows `status=`, `lead=`, `pct=`, `ofLead=` and `secret: state= values=`. This is
    the data Milestone 2 needs: whether the threat *state* (0–3) stays readable when the threat
    *values* are hidden.
 

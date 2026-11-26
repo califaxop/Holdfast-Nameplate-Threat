@@ -179,10 +179,14 @@ def _(L, ns):
       assert(all:find("on you=true status=3 lead=n/a pct=50 ofLead=n/a"), all)
       MOCK.hidden = true; UnitThreatLeadSituation = function() error("nope") end
       C_Secrets = { ShouldUnitThreatStateBeSecret = function() return false end, ShouldUnitThreatValuesBeSecret = function() return true end }
-      PRINTS = {}; SlashCmdList.HOLDFAST("debug"); SlashCmdList.HOLDFAST("debug")
+      PRINTS = {}; SlashCmdList.HOLDFAST("scan")
       all = table.concat(PRINTS, "\\n")
       assert(all:find("on you=<hidden> status=<hidden> lead=error pct=<hidden>"), all)
       assert(all:find("secret: state=false values=true"), all)
+      -- with debug on, each change prints the same line, at that moment
+      PRINTS = {}; MOCK.hidden = false; MOCK.threat.player = { tanking = false, status = 0 }; NS.db.role = "tank"; MOCK.Look()
+      all = table.concat(PRINTS, "\\n")
+      assert(all:find("hidden %-> lost | on you=false status=0"), all)
     ''')
 
 @test("settings window: a shrunk shared font (EllesmereUI's tracker) isn't used; no style settings: EllesmereUI's look on its own")

@@ -21,7 +21,8 @@
 - Safer: a hidden group role is treated as no role.
 - Settings saved by a newer version are kept if you go back a version.
 - `/hf debug` also shows the game's threat status, lead and % calls per enemy, and whether the
-  game says it's hiding them.
+  game says it's hiding them, at every state change while it's on. New `/hf scan`: the same for
+  every enemy at once.
 - New: DEVELOPMENT.md, API_COMPATIBILITY.md, CHANGELOG.md and offline tests (`tests/`).
 
 ## 5.0.1
