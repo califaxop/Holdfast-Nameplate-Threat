@@ -1,3 +1,4 @@
+-- luacheck: globals HoldfastAPI
 -- Threat transition events: what changed on an enemy, for Holdfast's alerts and overview, and for
 -- other addons (HoldfastAPI). Payloads never carry a hidden value: a % is included only when it's
 -- readable.
