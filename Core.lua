@@ -19,7 +19,9 @@ ns.DEFAULTS = {
   showIcon          = true,
   -- alerts (off by default): a sound and / or a message on screen when an enemy turns red, and
   -- (if chosen) orange
-  alerts            = { sound = false, screen = false, onLost = true, onUnstable = false },
+  -- (text: your own messages, by key - lostTank, lostDps, unstableTank, unstableDps; empty: the
+  -- default; withName: the enemy's name after it)
+  alerts            = { sound = false, screen = false, onLost = true, onUnstable = false, withName = true, text = {} },
   -- the threat overview window (off by default) and its filter: all / unstable / lost / me / others
   overview          = { show = false, filter = "all" },  -- "!": it's on you (not the tank), or you lost it (tank); replaces the % at 100%
   replaceGameHighlight = true, -- hide the game's own aggro flare (Aggro Display: Progressive) where Holdfast draws

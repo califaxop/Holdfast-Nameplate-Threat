@@ -294,7 +294,9 @@ safety check off; 75 passes averaging 0.102 ms.
    settings.
 2. Target an enemy and type `/hf threat`; in a fight, `/hf profile 20` and wait for the report.
 3. `/hf reset`: it asks; `/hf reset yes` puts everything back (then set your role and style again).
-4. The alerts' Test button: "Lost aggro" (no "Unknown"); the settings window: no overlapping text.
+4. The alerts' Test button: "Lost aggro" (no "Unknown"). Type your own message, press Test: yours
+   shows; empty it: the default again. The settings window: two columns, nothing overlapping or
+   cut off, and it fits your screen.
 5. A normal party run with your usual settings. Any Lua errors?
 6. Still never seen in game (fine to ship without, each falls back safely): "The group's tanks",
    "Me and my pet", "Warn at" solo, "Replace the game's aggro highlight" unticked mid-fight, raids.

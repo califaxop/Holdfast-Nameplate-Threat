@@ -339,6 +339,10 @@ def _(L, ns):
       MOCK.threat = { party1 = { status = 3 } }; MOCK.Group(true); MOCK.Look()
       assert(MOCK.sounds == 2, "joining the fight on someone else: no alert")
       NS.db.alerts.screen = true; NS.Alerts.Test()
+      assert(NS.Alerts.lastLabel == "Lost aggro", "the default message")
+      NS.db.alerts.text.lostTank = "Taunt it!"; NS.Alerts.Test()
+      assert(NS.Alerts.lastLabel == "Taunt it!", "your own message: " .. tostring(NS.Alerts.lastLabel))
+      NS.db.alerts.text.lostTank = nil; NS.Alerts.Test(); assert(NS.Alerts.lastLabel == "Lost aggro", "emptied: the default again")
     ''')
 
 @test("M5 overview: nothing built while off; most dangerous first; filters; hiding stops its updates")

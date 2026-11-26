@@ -10,10 +10,16 @@ local GAP = 2 -- seconds between alerts
 local last = -GAP
 local SOUND = (SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959
 
-local TEXT = {
-  lost = { tank = "Lost aggro", dps = "Aggro on you" },
-  unstable = { tank = "Losing aggro", dps = "Close to pulling" },
-}
+-- the messages: the player's own (settings: alerts.text), or these
+local DEFAULT = { lostTank = "Lost aggro", lostDps = "Aggro on you", unstableTank = "Losing aggro", unstableDps = "Close to pulling" }
+AL.MESSAGES = { { "lostTank", "Lost it (tank)" }, { "lostDps", "On you (not the tank)" },
+  { "unstableTank", "Losing it (tank)" }, { "unstableDps", "Close to pulling (not the tank)" } }
+function AL.Default(key) return DEFAULT[key] end
+local function Label(kind, dps)
+  local key = kind .. (dps and "Dps" or "Tank")
+  local t = ns.db.alerts.text and ns.db.alerts.text[key]
+  return (type(t) == "string" and t ~= "") and t or DEFAULT[key]
+end
 
 local frame, text, fade
 local function Message(kind, dps, unit)
@@ -30,10 +36,12 @@ local function Message(kind, dps, unit)
   local colors = dps and ns.db.colorsDps or ns.db.colors
   local c = colors[kind == "lost" and "nothreat" or "unstable"]
   text:SetTextColor(c[1], c[2], c[3])
-  local label = TEXT[kind][dps and "dps" or "tank"]
-  local name = unit and UnitName(unit)
-  -- (the enemy's name may be hidden: the game draws it, Holdfast doesn't read it)
-  if ns.isSecret(name) or name ~= nil then text:SetFormattedText("%s: %s", label, name) else text:SetText(label) end
+  local label = Label(kind, dps)
+  AL.lastLabel = label -- (tests, diagnostics)
+  local name = unit and ns.db.alerts.withName and UnitName(unit)
+  -- (the enemy's name may be hidden: the game draws it after the message, Holdfast never reads it,
+  -- so it can't be placed inside the player's text)
+  if ns.isSecret(name) or (name ~= nil and name ~= false) then text:SetFormattedText("%s: %s", label, name) else text:SetText(label) end
   fade:Stop(); frame:SetAlpha(1); frame:Show(); fade:Play()
 end
 
