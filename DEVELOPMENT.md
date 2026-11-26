@@ -227,4 +227,9 @@ or chat output). The next milestone starts only once those results are in.
 - Measured in a party (5.0.2, `/hf debug`): `UnitThreatSituation` and `UnitThreatLeadSituation`
   readable (`status=0 lead=3`, `status=3 lead=0`), `C_Secrets.ShouldUnitThreatStateBeSecret` false,
   `ShouldUnitThreatValuesBeSecret` true; isTanking and % hidden.
-- Not measured yet: a hidden % drawn with `SetFormattedText` (docs allow it), and raids.
+- 5.1.0 in a party, as the tank: secure → lost (`status=0 lead=3`) and back to secure
+  (`status=3 lead=3`) from the readable state. `status=3` with `lead=3` ("not first") at the same
+  moment contradicts the docs; the lead may lag the status by an update. Holdfast treats only lead
+  1–2 as unstable, so this reads as secure.
+- Not measured yet: a hidden % drawn with `SetFormattedText` (docs allow it), orange in a party,
+  and raids.
