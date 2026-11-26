@@ -258,4 +258,7 @@ or chat output). The next milestone starts only once those results are in.
   have the most threat but it's attacking someone else).
 - 5.1.0 in a party, not the tank: the hidden % **is drawn by the game** (`SetFormattedText` with a
   hidden value: "24%", "3%" beside the plates, in the safe colour), `secret: values=true`.
-- Not measured yet: orange as not the tank in a party (`status=1`), "Warn at" solo, and raids.
+- 5.2.0 in a party, not the tank: ownership observed (`on tank (party1)`, the group's tank by
+  role); orange as not the tank seen (`lost -> unstable`, `status=1`); the hidden % drawn on
+  several plates at once (0%, 62%).
+- Not measured yet: "Warn at" solo, "The group's tanks" and "Me and my pet" modes, and raids.
