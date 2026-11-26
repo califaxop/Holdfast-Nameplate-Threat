@@ -265,6 +265,9 @@ or chat output). The next milestone starts only once those results are in.
 6. Still open: "The group's tanks", "Me and my pet", "Warn at" solo, and "Replace the game's aggro
    highlight" unticked mid-fight.
 
+In game (5.3.0, a party, Scarlet Monastery, border glows): 152 update passes averaging
+0.098 ms; 126 of 152 updates unchanged (not redrawn); the safety check ran only in combat.
+
 ### Performance (mock client, `python3 tests/bench.py`)
 
 10 s of a party fight, 20 enemy plates, pixel glows, three threat-list updates a frame:

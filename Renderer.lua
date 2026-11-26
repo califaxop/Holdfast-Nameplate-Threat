@@ -677,9 +677,10 @@ function Render(plate, state, unit)
   ShowFlash(f.nothreat, what == "lost" and st.nothreat.show, st.nothreat.flash)
 end
 
+-- the plate left the screen: its indicator is hidden and let go (kept in the pool for reuse)
 function V.Hide(plate)
   local f = plate and current[plate]
-  if f then HideAll(f); f.renderKey = nil end
+  if f then HideAll(f); f:Hide(); f.renderKey = nil; current[plate] = nil end
 end
 
 -- the plate shows another enemy now (recycled): restyle and redraw it on its next update

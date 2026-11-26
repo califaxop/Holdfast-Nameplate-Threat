@@ -344,6 +344,8 @@ def _(L, ns):
       assert(MOCK.Look() == "lost nothreat!")
       MOCK.Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
       assert(MOCK.Glows() == "", "removed: " .. MOCK.Glows())
+      local made, shown = NS.Renderer.Counts()
+      assert(shown == 0 and made == 1, "let go, kept for reuse: made " .. made .. ", showing " .. shown)
       assert(NS.State.Get("nameplate1") == nil)
       MOCK.threat.player = { tanking = true, status = 3 }
       MOCK.Fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
