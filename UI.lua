@@ -9,11 +9,17 @@ local W = "Interface\\Buttons\\WHITE8X8"
 local DIALOG_BG = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark"
 local DIVIDER = "Interface\\Common\\UI-TooltipDivider-Transparent"
 
+-- the first of these font objects that exists and is a readable size (another addon can shrink a
+-- shared one: EllesmereUI's quest tracker sets the game's tracker fonts to 1 px)
 local function FontObj(...)
   for i = 1, select("#", ...) do
     local f = _G[select(i, ...)]
-    if f then return f end
+    if f and f.GetFont then
+      local ok, path, size = pcall(f.GetFont, f)
+      if ok and type(path) == "string" and type(size) == "number" and size >= 8 then return f end
+    end
   end
+  return _G.GameFontHighlight
 end
 
 local PALETTES = {
@@ -49,7 +55,7 @@ if UI.HasEllesmere() then
 end
 function UI.EUI()
   local S = UI.euiSkin
-  if S and not (ns.db and ns.db.euiStyle == false) and (not S.IsEnabled or S.IsEnabled()) then return S end
+  if S and not (ns.db and ns.db.windowStyle == "plain") and (not S.IsEnabled or S.IsEnabled()) then return S end
 end
 
 -- the player's EllesmereUI font, as font objects (made once per font)
@@ -69,7 +75,7 @@ end
 
 function UI.Theme()
   local S = UI.EUI()
-  local flare = not S and (not ns.db or ns.db.flareStyle ~= false) and UI.FlareBorder() ~= nil
+  local flare = not S and (not ns.db or ns.db.windowStyle ~= "plain") and UI.FlareBorder() ~= nil
   local th = {}
   for k, v in pairs(flare and PALETTES.flare or PALETTES.plain) do th[k] = v end
   th.flare = flare

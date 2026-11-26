@@ -198,11 +198,13 @@ local function BuildPanel(panel)
     GameTooltip:Show()
   end)
   rep:HookScript("OnLeave", function() GameTooltip:Hide() end)
-  track(at(UI.Check(panel, "FlareUI style for this window (needs FlareUI)", S("flareStyle"), W_, function() UI.Restyle() end), 26, y - 122))
-  track(at(UI.Check(panel, "EllesmereUI style for this window (needs EllesmereUI)", S("euiStyle"), W_, function() UI.Restyle() end), 26, y - 146))
+  at(UI.Text(panel, "line", "Window look"), 26, y - 126)
+  track(at(UI.Selector(panel, 300, { { "auto", "Auto (matches your UI)" }, { "plain", "Plain" } },
+    S("windowStyle"), function() UI.Restyle() end,
+    "This window's look. Auto: EllesmereUI's when it's installed, else FlareUI's, else the game's own style."), 120, y - 122))
 
   -- Preview ----------------------------------------------------------------
-  y = y - 182
+  y = y - 158
   at(UI.Section(panel, "Preview on your target", W_), 26, y); y = y - 32
   local buttons = {}
   local MODES = { { "secure", "Holding / safe" }, { "lost", "Lost / on you" } }

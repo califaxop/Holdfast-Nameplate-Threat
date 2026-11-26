@@ -185,6 +185,20 @@ def _(L, ns):
       assert(all:find("secret: state=false values=true"), all)
     ''')
 
+@test("settings window: a shrunk shared font (EllesmereUI's tracker) isn't used; style checkboxes migrate to Auto")
+def _(L, ns):
+    lua(L, '''
+      ObjectiveTrackerHeaderFont = MOCK.obj(); ObjectiveTrackerHeaderFont.GetFont = function() return "x.ttf", 1, "" end
+      ObjectiveTrackerLineFont = MOCK.obj(); ObjectiveTrackerLineFont.GetFont = function() return "x.ttf", 1, "" end
+      GameFontNormalMed2 = MOCK.obj(); GameFontNormalMed2.GetFont = function() return "f.ttf", 14, "" end
+      GameFontHighlight = MOCK.obj(); GameFontHighlight.GetFont = function() return "f.ttf", 12, "" end
+      local th = NS.UI.Theme()
+      assert(th.headerFont == GameFontNormalMed2, "header font")
+      assert(th.lineFont == GameFontHighlight, "line font")
+      HoldfastDB = { version = 5, euiStyle = false, flareStyle = true, iconV2 = true }; NS.LoadDB()
+      assert(NS.db.windowStyle == "auto" and NS.db.euiStyle == nil and NS.db.flareStyle == nil)
+    ''')
+
 @test("slash commands run without errors")
 def _(L, ns):
     lua(L, '''

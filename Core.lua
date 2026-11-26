@@ -25,8 +25,9 @@ ns.DEFAULTS = {
   glowStyle         = "auto",  -- "auto" (the plate's border art; an outline on FlareUI / EllesmereUI plates),
                                -- "border", "outline", "pixel" (pixel lines), "autocast" (sparkles)
   tank              = "auto",  -- whose aggro the glows follow: "auto" (your pet when it's out), "me", "pet"
-  flareStyle        = true,  -- settings window in FlareUI's style when FlareUI is installed
-  euiStyle = true,       -- EllesmereUI look when EllesmereUI is installed (its skinning API)
+  -- the settings window's look: "auto" (EllesmereUI's when installed, else FlareUI's, else plain)
+  -- or "plain"
+  windowStyle       = "auto",
   colors = {
     aggro    = { 0.35, 1.00, 0.45 },  -- stable
     unstable = { 1.00, 0.50, 0.05 },  -- unstable
@@ -98,6 +99,8 @@ function ns.LoadDB()
   if db.percentNudgeX ~= nil or db.percentNudgeY ~= nil then -- box under the level (test builds only)
     db.percentNudgeX, db.percentNudgeY, db.iconOffsetX = nil, nil, nil
   end
+  -- 5.0.2: the FlareUI / EllesmereUI style checkboxes become one automatic setting
+  if db.flareStyle ~= nil or db.euiStyle ~= nil then db.flareStyle, db.euiStyle = nil, nil end
   if not db.iconV2 then db.showIcon = true; db.iconV2 = true end -- 3.9.0: the "!" now stands in for the % at 100%
   db.version = 5
   for k, d in pairs(ns.DEFAULTS) do
