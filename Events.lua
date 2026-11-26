@@ -1,4 +1,3 @@
--- luacheck: globals HoldfastAPI
 -- Threat transition events: what changed on an enemy, for Holdfast's alerts and overview, and for
 -- other addons (HoldfastAPI). Payloads never carry a hidden value: a % is included only when it's
 -- readable.
@@ -69,7 +68,7 @@ end
 
 -- For other addons: HoldfastAPI.RegisterCallback(event, fn) -> handle, UnregisterCallback(handle),
 -- GetState(unit) -> payload for a nameplate unit ("nameplate3") or nil, Events (the names).
-HoldfastAPI = {
+HoldfastAPI = { -- luacheck: ignore 131 (a global on purpose: for other addons)
   RegisterCallback = E.On,
   UnregisterCallback = E.Off,
   GetState = function(unit)
