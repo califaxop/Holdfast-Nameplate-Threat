@@ -268,6 +268,7 @@ SlashCmdList.HOLDFAST = function(msg)
     end
     return
   else
+    if cmd ~= "help" then ns.Print("unknown command \"" .. cmd .. "\". The commands:") end
     ns.Print("/hf (settings)  -  /hf icon | aggro  -  /hf debug  -  /hf scan  -  /hf perf  -  /hf tank")
     return
   end
