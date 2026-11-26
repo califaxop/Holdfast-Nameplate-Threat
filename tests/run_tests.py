@@ -339,10 +339,17 @@ def _(L, ns):
       MOCK.threat = { party1 = { status = 3 } }; MOCK.Group(true); MOCK.Look()
       assert(MOCK.sounds == 2, "joining the fight on someone else: no alert")
       NS.db.alerts.screen = true; NS.Alerts.Test()
-      assert(NS.Alerts.lastLabel == "Lost aggro", "the default message")
-      NS.db.alerts.text.lostTank = "Taunt it!"; NS.Alerts.Test()
-      assert(NS.Alerts.lastLabel == "Taunt it!", "your own message: " .. tostring(NS.Alerts.lastLabel))
-      NS.db.alerts.text.lostTank = nil; NS.Alerts.Test(); assert(NS.Alerts.lastLabel == "Lost aggro", "emptied: the default again")
+      UnitExists = function(u) return u ~= "target" and u ~= "pet" end
+      local function t() return NS.Alerts.lastText end
+      assert(t() == "Lost aggro: Mob", "with a target: its name: " .. tostring(t()))
+      NS.Alerts.Test()
+      assert(t() == "Lost aggro: Scarlet Monk", "the default, with a sample name: " .. tostring(t()))
+      NS.db.alerts.text.lostTank = "Aggro lost on:"; NS.Alerts.Test("lostTank")
+      assert(t() == "Aggro lost on: Scarlet Monk", "your text ends in ':': no second one: " .. tostring(t()))
+      NS.db.alerts.text.lostDps = "AGGRO ON YOU!"; NS.db.alerts.names.lostDps = false; NS.Alerts.Test("lostDps")
+      assert(t() == "AGGRO ON YOU!", "this one without the name: " .. tostring(t()))
+      NS.Alerts.Test("unstableDps"); assert(t() == "Close to pulling: Scarlet Monk", tostring(t()))
+      NS.db.alerts.text.lostTank = nil; NS.Alerts.Test(); assert(t() == "Lost aggro: Scarlet Monk", "emptied: the default again")
     ''')
 
 @test("M5 overview: nothing built while off; most dangerous first; filters; hiding stops its updates")

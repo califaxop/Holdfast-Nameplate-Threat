@@ -15,14 +15,16 @@ local DEFAULT = { lostTank = "Lost aggro", lostDps = "Aggro on you", unstableTan
 AL.MESSAGES = { { "lostTank", "Lost it (tank)" }, { "lostDps", "On you (not the tank)" },
   { "unstableTank", "Losing it (tank)" }, { "unstableDps", "Close to pulling (not the tank)" } }
 function AL.Default(key) return DEFAULT[key] end
-local function Label(kind, dps)
-  local key = kind .. (dps and "Dps" or "Tank")
+local function Label(key)
   local t = ns.db.alerts.text and ns.db.alerts.text[key]
   return (type(t) == "string" and t ~= "") and t or DEFAULT[key]
 end
 
 local frame, text, fade
-local function Message(kind, dps, unit)
+-- the message for key (lostTank...), with the enemy's name after it if chosen for that message:
+-- "Lost aggro: Scarlet Monk" (or "Aggro lost on: Scarlet Monk" when your text ends in ":" or "-").
+-- name: the enemy's unit, or a plain sample name (Test)
+local function Message(key, unit, sample)
   if not frame then
     frame = CreateFrame("Frame", nil, UIParent)
     frame:SetSize(600, 40); frame:SetPoint("TOP", 0, -170); frame:SetFrameStrata("HIGH")
@@ -33,15 +35,22 @@ local function Message(kind, dps, unit)
     local out = fade:CreateAnimation("Alpha"); out:SetFromAlpha(1); out:SetToAlpha(0); out:SetDuration(0.6); out:SetOrder(2)
     fade:SetScript("OnFinished", function() frame:Hide() end)
   end
+  local dps = key:find("Dps$") ~= nil
   local colors = dps and ns.db.colorsDps or ns.db.colors
-  local c = colors[kind == "lost" and "nothreat" or "unstable"]
+  local c = colors[key:find("^lost") and "nothreat" or "unstable"]
   text:SetTextColor(c[1], c[2], c[3])
-  local label = Label(kind, dps)
-  AL.lastLabel = label -- (tests, diagnostics)
-  local name = unit and ns.db.alerts.withName and UnitName(unit)
+  local label = Label(key)
+  local names = ns.db.alerts.names or {}
+  local name = names[key] ~= false and (sample or (unit and UnitName(unit))) or nil
   -- (the enemy's name may be hidden: the game draws it after the message, Holdfast never reads it,
-  -- so it can't be placed inside the player's text)
-  if ns.isSecret(name) or (name ~= nil and name ~= false) then text:SetFormattedText("%s: %s", label, name) else text:SetText(label) end
+  -- so it can't be placed inside your text)
+  local sep = label:find("[:%-]%s*$") and " " or ": "
+  if ns.isSecret(name) or name ~= nil then
+    text:SetFormattedText("%s%s%s", label, sep, name)
+    AL.lastText = label .. sep .. (ns.isSecret(name) and "<name>" or name) -- (tests, diagnostics)
+  else
+    text:SetText(label); AL.lastText = label
+  end
   fade:Stop(); frame:SetAlpha(1); frame:Show(); fade:Play()
 end
 
@@ -55,13 +64,14 @@ local function OnChange(_, p)
   last = now
   AL.shown = AL.shown + 1
   if a.sound then PlaySound(SOUND, "Master") end
-  if a.screen then Message(p.kind, p.dps, p.unit) end
+  if a.screen then Message(p.kind .. (p.dps and "Dps" or "Tank"), p.unit) end
 end
 ns.Events.On("STATE_CHANGED", OnChange)
 
--- the settings' Test button
-function AL.Test()
-  local a = ns.db.alerts
-  if a.sound then PlaySound(SOUND, "Master") end
-  Message("lost", false, nil) -- (no enemy: just the words)
+-- the settings' Test buttons: one message (default: lost it, as the tank), with your target's name,
+-- or a sample one
+function AL.Test(key)
+  if ns.db.alerts.sound then PlaySound(SOUND, "Master") end
+  local hasTarget = UnitExists("target")
+  Message(key or "lostTank", hasTarget and "target" or nil, (not hasTarget) and "Scarlet Monk" or nil)
 end

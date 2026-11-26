@@ -18,8 +18,10 @@ own), plus:
 - The settings window is two columns (whose aggro, glows, preview and the overview on the left;
   display, the %, and alerts on the right): about 930 x 720 instead of a long 470-wide list.
 - Alerts: your own message for each (lost it, on you, losing it, close to pulling), empty for the
-  default; "Add the enemy's name" (on by default). The name goes after your message: in groups
-  the game can hide it, and Holdfast only hands it to the game to draw.
+  default; for each, whether the enemy's name goes after it, and a Test button (with your
+  target's name, or a sample one). The name always goes after your message (after a space when
+  your text ends in ":" or "-"): in groups the game can hide it, and Holdfast only hands it to
+  the game to draw.
 - Tests for a group without roles, a healer, several enemies at once and a recycled nameplate
   (32 offline tests).
 
