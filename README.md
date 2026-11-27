@@ -25,7 +25,7 @@ A glow around each enemy's nameplate shows at a glance whether it's attacking yo
 2. Type `/hf` and check **My role** and **Whose aggro to show**.
 3. Use the **Preview** buttons on your target to tune the look.
 4. Optional: turn on **Alerts** and the **Threat overview** in the same window.
-5. Something not as expected? `/hf status` and `/hf threat` show what Holdfast sees.
+5. Something not as expected? `/hf status` and `/hf threat` show what Holdfast sees; **Bugs & Feedback** (top right of the settings) sends it to us.
 
 ## Commands
 | Command | Does |
@@ -39,6 +39,7 @@ A glow around each enemy's nameplate shows at a glance whether it's attacking yo
 | `/hf debug` | The same, at every change while it's on |
 | `/hf perf` | How much work Holdfast is doing (`/hf perf reset` to start counting again) |
 | `/hf profile` | Count Holdfast's work for 10 seconds (or `/hf profile 30`) and report |
+| `/hf report` | Bugs & Feedback: the form's link and a line to paste into it |
 | `/hf reset` | Put every setting back to its default (asks first) |
 
 ## Good to know
@@ -51,7 +52,7 @@ A glow around each enemy's nameplate shows at a glance whether it's attacking yo
 New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 AM US Eastern). Urgent fixes ship sooner.
 
 ## Feedback
-Found a bug or have an idea? [Open an issue](https://github.com/califaxop/holdfast-nameplate-threat/issues/new/choose): there's a short form for each. The settings window has a "Report a bug / suggest" button with this link too.
+Found a bug, have feedback or want a feature? Click **Bugs & Feedback** at the top right of the settings window (or type `/hf report`): it gives you the form's link and, for a bug, a line to paste into it with everything we need. Or [open an issue](https://github.com/califaxop/holdfast-nameplate-threat/issues/new/choose) directly: there's a short form for each.
 
 ## Recent changes
 - **6.1.0:** "Bugs & Feedback" now sits at the top right of the settings window, next to the ×. It opens a window (like Questie's trace export) with the form's link to copy at the top, for bug reports, feedback and feature requests, and for a bug, one line to paste into the form with your version, the game client, what Holdfast follows, its settings and the glows showing; never your name, realm or guild. Also `/hf report`. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
