@@ -2,7 +2,7 @@
 
 ## 6.1.0
 
-- "Report a bug" now sits at the top right of the settings window, next to the ×, and opens a bug report window (like Questie's trace export): the form's link to copy at the top, then one line to paste into the form with your version, the game client, what Holdfast follows, its settings and the glows showing; never your name, realm or guild. Also `/hf report`. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
+- "Bugs & Feedback" now sits at the top right of the settings window, next to the ×. It opens a window (like Questie's trace export) with the form's link to copy at the top, for bug reports, feedback and feature requests, and for a bug, one line to paste into the form with your version, the game client, what Holdfast follows, its settings and the glows showing; never your name, realm or guild. Also `/hf report`. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
 
 ## 6.0.0 (Milestone 6: diagnostics, validation, release)
 

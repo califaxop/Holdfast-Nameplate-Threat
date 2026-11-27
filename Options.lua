@@ -322,7 +322,7 @@ function ns.CreateOptions()
 end
 
 -- Report a bug (the title bar's button, /hf report)
-local BUG = { name = "HoldfastReportWindow", title = "Holdfast Bug Report",
+local BUG = { name = "HoldfastReportWindow", title = "Holdfast Bugs & Feedback",
   repo = "https://github.com/califaxop/holdfast-nameplate-threat/issues/new",
   included = "Included: Holdfast's version, the game client, your class and level, its settings, the nameplates showing and whether you're grouped. Never: your name, realm, guild or other players.",
   build = function() return ns.BugReport() end }
@@ -337,7 +337,7 @@ function ns.OpenOptions()
     window = UI.Window("HoldfastOptionsWindow", 26 + W_ + 40 + W_ + 26, 600) -- (two columns)
     window:SetPoint("CENTER")
     UI.SetHost(window) -- pop-ups (the bug report) sit over this window
-    UI.HeaderButton(window, "Report a bug", 110, function() ns.ShowBugReport() end)
+    UI.HeaderButton(window, "Bugs & Feedback", 130, function() ns.ShowBugReport() end)
     local ok, e = pcall(BuildPanel, window)
     if not ok then window:Hide(); window = nil; ns.Print("settings failed: " .. tostring(e)); return end
     window:SetHeight(window.height or 600)
