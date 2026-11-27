@@ -542,5 +542,18 @@ def _(L, ns):
       for _, c in ipairs({ "icon", "icon", "aggro", "aggro", "debug", "debug", "tank", "tip", "help" }) do SlashCmdList.HOLDFAST(c) end
     ''')
 
+@test("bug report: the title bar's button and /hf report open the report window (link, line, counters)")
+def _(L, ns):
+    lua(L, '''
+      NS.OpenOptions()
+      SlashCmdList.HOLDFAST("report")
+      local w = NS.ShowBugReport()
+      assert(w and w._shown, "shown")
+      assert(w.url:find("template=bug_report.yml", 1, true) and w.line:find("Holdfast; client 1.60.1", 1, true) and w.line:find("whose aggro", 1, true), w.line)
+      assert(w.stats[1].text._shown ~= false and w.stats[6].icon._shown ~= false, "six counters")
+      NS.ShowBugReport("idea")
+      assert(w.url:find("feature_request", 1, true))
+    ''')
+
 print(f"\n{count - len(failures)}/{count} passed")
 sys.exit(1 if failures else 0)

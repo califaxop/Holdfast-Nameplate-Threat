@@ -193,16 +193,18 @@ end
 -- /hf status: the version, what Holdfast follows and why, the settings that matter, the
 -- nameplate addons found, and what this client lets addons do
 local function yes(v) return v and "yes" or "no" end
-function Status()
+function ns.StatusLines()
+  local L = {}
+  local function out(l) L[#L + 1] = l end
   local db = ns.db
   local get = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
   local ver = get and get(ns.name, "Version") or "?"
   local mode, f = S.Mode(), S.Followed()
-  ns.Print(format("version %s | whose aggro: %s | my role: %s (now %s) | glows: %s | following: %s", ver,
+  out(format("version %s | whose aggro: %s | my role: %s (now %s) | glows: %s | following: %s", ver,
     db.tank or "auto", db.role or "auto", S.Role() or "not set", MODE_TEXT[mode] or mode,
     #f > 0 and table.concat(f, ", ") or "nobody (no pet out)"))
   local a = db.alerts
-  ns.Print(format("glow style: %s | threat %%: %s | warn at: %d%% | only in a group: %s | alerts: %s%s%s | overview: %s (%s)",
+  out(format("glow style: %s | threat %%: %s | warn at: %d%% | only in a group: %s | alerts: %s%s%s | overview: %s (%s)",
     db.glowStyle or "auto", db.showPercent and "on" or "off", db.warnAt or 80, yes(db.onlyInGroup),
     (a.sound or a.screen) and ((a.sound and "sound " or "") .. (a.screen and "message " or "")) or "off",
     (a.sound or a.screen) and (a.onLost and "on red" or "") or "", (a.sound or a.screen) and a.onUnstable and ", orange" or "",
@@ -210,15 +212,35 @@ function Status()
   local _, _, kinds = V.Counts()
   local list = {}
   for k, c in pairs(kinds) do list[#list + 1] = k .. " " .. c end
-  ns.Print(format("nameplates: %s | EllesmereUI plates: %s | FlareUI plates: %s",
+  out(format("nameplates: %s | EllesmereUI plates: %s | FlareUI plates: %s",
     #list > 0 and table.concat(list, ", ") or "none showing",
     yes(type(_G.EllesmereNameplates_NS) == "table"), yes(type(FlareUI) == "table" and type(FlareUI.Nameplates) == "table")))
-  ns.Print(format("%s, %s | hidden answers drive the glows: %s | the game's secret checks: %s | replace the game's flare: %s",
+  out(format("%s, %s | hidden answers drive the glows: %s | the game's secret checks: %s | replace the game's flare: %s",
     IsInRaid() and "in a raid" or IsInGroup() and "in a party" or "solo",
     InCombatLockdown() and "in combat" or "out of combat", yes(V.HasSecretSupport()), yes(C_Secrets ~= nil),
     yes(db.replaceGameHighlight)))
+  return L
 end
+function Status() for _, l in ipairs(ns.StatusLines()) do ns.Print(l) end end
 
+-- the bug report window's line and counters (Report a bug, /hf report)
+function ns.BugReport()
+  local okB, build, number, _, toc = pcall(GetBuildInfo)
+  local _, class = UnitClass("player")
+  local line = format("Holdfast; client %s (%s), interface %s; %s %d // ", okB and tostring(build) or "?",
+    okB and tostring(number) or "?", okB and tostring(toc) or "?", tostring(class), UnitLevel("player"))
+    .. table.concat(ns.StatusLines(), " // ")
+  local _, n = V.Counts()
+  local f = S.Followed()
+  return line, {
+    { "Interface\\Icons\\Ability_Warrior_DefensiveStance", "Whose aggro", MODE_TEXT[S.Mode()] or S.Mode() },
+    { "Interface\\Icons\\INV_Shield_06", "My role", S.Role() or "not set" },
+    { "Interface\\Icons\\Ability_Hunter_BeastCall", "Following", #f > 0 and table.concat(f, ", ") or "nobody" },
+    { "Interface\\Icons\\Spell_Nature_Invisibilty", "Glows showing", tostring(n or 0) },
+    { "Interface\\Icons\\INV_Misc_Gem_Pearl_04", "Glow style", ns.db.glowStyle or "auto" },
+    { "Interface\\Icons\\INV_Misc_GroupNeedMore", "Group", IsInRaid() and "raid" or IsInGroup() and "party" or "solo" },
+  }
+end
 -- /hf threat [unit]: everything known about one enemy (your target by default): its state, who
 -- it's on, and every group member's threat status on it (a number, nil, <hidden> or error)
 function Threat(unit)
@@ -355,6 +377,9 @@ SlashCmdList.HOLDFAST = function(msg)
     ResetPerf()
     ns.Print(format("profiling for %d s: fight as usual...", secs))
     C_Timer.After(secs, function() ns.Print(format("profile of the last %d s:", secs)); PrintPerf() end)
+    return
+  elseif cmd == "report" then
+    ns.ShowBugReport()
     return
   elseif cmd == "status" then
     Status()

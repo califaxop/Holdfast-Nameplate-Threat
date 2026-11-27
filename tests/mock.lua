@@ -92,6 +92,9 @@ UnitCanAttack = function() return true end
 UnitAffectingCombat = function() return true end
 UnitIsUnit = function(a, b) return MOCK.same and MOCK.same(a, b) or false end
 UnitName = function() return "Mob" end
+UnitClass = function() return "Warrior", "WARRIOR" end
+UnitLevel = function() return 40 end
+GetBuildInfo = function() return "1.60.1", "12345", "Nov 1 2026", 16001 end
 IsInGroup = function() return MOCK.inGroup end
 -- the group: MOCK.members others (party1..), MOCK.raid for a raid (raid1 is you), MOCK.roles[unit]
 IsInRaid = function() return MOCK.raid or false end
