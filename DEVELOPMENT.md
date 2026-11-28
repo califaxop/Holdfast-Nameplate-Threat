@@ -31,7 +31,8 @@ Every file shares the addon namespace `ns`.
 | Events.lua | `ns.Events`, `HoldfastAPI` | Transition events (STATE_CHANGED, AGGRO_GAINED / LOST, PET_AGGRO_GAINED / LOST, THREAT_UNSTABLE / SECURE, TARGET_CHANGED, UNIT_UNTRACKABLE), payloads without hidden values, and the public API for other addons |
 | Alerts.lua | `ns.Alerts` | Optional sound / on-screen message when an enemy turns red (and orange, if chosen); not on joining the fight; at most one every 2 s |
 | Overview.lua | `ns.Overview` | Optional window: enemies on your plates, most dangerous first, with state, owner, % and filters; built and updated only while shown |
-| UI.lua | `ns.UI` | The shared settings-window kit (also used by the other addons); FlareUI / EllesmereUI skins |
+| UI.lua | `ns.UI` | The threat overview's look: FlareUI / EllesmereUI / plain |
+| Settings.lua | `ns.UI` | The shared settings kit (6.2.0): the game's own Settings design (window, pages, search, rows, controls, pop-ups, the Bugs & Feedback window), the same in every addon |
 | Options.lua | — | The settings window and the Esc > Options > AddOns entry |
 | Engine.lua | — | Events, the update loop and the slash commands |
 
