@@ -188,8 +188,8 @@ local function PageStatus(_, R)
 end
 
 local function BuildWindow()
-  window = UI.Settings({ name = "HoldfastOptionsWindow", title = "Holdfast", logo = "Interface\\AddOns\\Holdfast\\media\\Logo",
-    tagline = "Threat glows on enemy nameplates.", bug = function() ns.ShowBugReport() end,
+  window = UI.Settings({ name = "HoldfastOptionsWindow", title = "Holdfast",
+    bug = function() ns.ShowBugReport() end,
     pages = {
       { "Threat", "Whose aggro to show, and your role.", PageThreat },
       { "Glows", "The glow for each threat state, its style, and a preview.", PageGlows },
@@ -234,11 +234,18 @@ function ns.ShowBugReport(kind)
   return UI.ShowBugReport(BUG, kind)
 end
 
-function ns.OpenOptions()
+-- the settings window, built the first time it's asked for
+local function GetWindow()
   if not window then
     local ok, e = pcall(BuildWindow)
     if not ok then if window then window:Hide() end; window = nil; ns.Print("settings failed: " .. tostring(e)); return end
   end
-  UI.ToggleWindow(window)
   return window
 end
+function ns.OpenOptions()
+  local w = GetWindow()
+  if w then UI.ToggleWindow(w) end
+  return w
+end
+UI.JoinSuite("Holdfast", "Threat glows on enemy nameplates.",
+  "Interface\\AddOns\\Holdfast\\media\\Logo", 4, GetWindow)

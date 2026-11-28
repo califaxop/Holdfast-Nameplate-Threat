@@ -6,6 +6,7 @@
 - The Bugs & Feedback window matches it.
 - The glows and the threat overview still follow FlareUI and EllesmereUI.
 - Tidied: the settings' old FlareUI / EllesmereUI styling is gone.
+- With several of the author's addons installed, each settings window shows them all as icon tabs at its top left: click one for its settings, in the same place.
 
 ## 6.1.0
 

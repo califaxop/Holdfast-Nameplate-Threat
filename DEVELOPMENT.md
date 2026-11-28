@@ -33,6 +33,7 @@ Every file shares the addon namespace `ns`.
 | Overview.lua | `ns.Overview` | Optional window: enemies on your plates, most dangerous first, with state, owner, % and filters; built and updated only while shown |
 | UI.lua | `ns.UI` | The threat overview's look: FlareUI / EllesmereUI / plain |
 | Settings.lua | `ns.UI` | The shared settings kit (6.2.0): the game's own Settings design (window, pages, search, rows, controls, pop-ups, the Bugs & Feedback window), the same in every addon |
+| Suite.lua | `ns.Suite` | The author's addons together: each installed one's settings window shows them all as icon tabs (a shared list, `CalifaxOPAddons`); the same file in every addon |
 | Options.lua | — | The settings window and the Esc > Options > AddOns entry |
 | Engine.lua | — | Events, the update loop and the slash commands |
 

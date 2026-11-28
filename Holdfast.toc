@@ -14,6 +14,7 @@ ThreatState.lua
 Adapters.lua
 Renderer.lua
 UI.lua
+Suite.lua
 Settings.lua
 Events.lua
 Alerts.lua
