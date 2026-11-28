@@ -519,7 +519,7 @@ def _(L, ns):
       assert(all:find("hidden %-> lost | on .- | on you=false status=0"), all)
     ''')
 
-@test("settings window: a shrunk shared font (EllesmereUI's tracker) isn't used; no style settings: EllesmereUI's look on its own")
+@test("threat overview's look: a shrunk shared font (EllesmereUI's tracker) isn't used; no style settings: EllesmereUI's look on its own")
 def _(L, ns):
     lua(L, '''
       ObjectiveTrackerHeaderFont = MOCK.obj(); ObjectiveTrackerHeaderFont.GetFont = function() return "x.ttf", 1, "" end
@@ -528,7 +528,6 @@ def _(L, ns):
       GameFontHighlight = MOCK.obj(); GameFontHighlight.GetFont = function() return "f.ttf", 12, "" end
       local th = NS.UI.Theme()
       assert(th.headerFont == GameFontNormalMed2, "header font")
-      assert(th.lineFont == GameFontHighlight, "line font")
       -- the window follows EllesmereUI when it's installed (an old saved "style off" is never read)
       HoldfastDB = { version = 5, euiStyle = false, windowStyle = "plain", iconV2 = true }; NS.LoadDB()
       NS.UI.euiSkin = { GetAccentColor = function() return 1, 0, 0 end, GetFont = function() return "e.ttf", "" end }
@@ -553,6 +552,25 @@ def _(L, ns):
       assert(w.stats[1].text._shown ~= false and w.stats[6].icon._shown ~= false, "six counters")
       NS.ShowBugReport("idea")
       assert(w.url:find("feature_request", 1, true))
+    ''')
+
+@test("settings window (6.2.0): the game's Settings design, six pages, every setting searchable")
+def _(L, ns):
+    lua(L, '''
+      MinimalSliderWithSteppersMixin = MinimalSliderWithSteppersMixin or { Label = { Right = 2 }, Event = { OnValueChanged = "OnValueChanged" } }
+      local printed
+      local p0 = NS.Print; NS.Print = function(m) printed = m end
+      local w = NS.OpenOptions()
+      if w and not w._shown then w = NS.OpenOptions() end
+      NS.Print = p0
+      assert(w and w.index and w._shown, tostring(printed))
+      local per, where = {}, {}
+      for _, e in ipairs(w.index) do per[e.page] = (per[e.page] or 0) + 1; where[e.label] = e.page end
+      for i = 1, 6 do assert((per[i] or 0) >= 2, "page " .. i .. ": " .. tostring(per[i])) end
+      assert(where["My role"] == 1 and where["Glow style"] == 2 and where["% distance"] == 3 and where["Sound"] == 4
+        and where["Show the overview window"] == 5 and where["Reset to defaults"] == 6)
+      w.Refresh()
+      for i = 1, 6 do w.Select(i) end
     ''')
 
 print(f"\n{count - len(failures)}/{count} passed")

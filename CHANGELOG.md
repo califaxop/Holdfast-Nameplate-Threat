@@ -1,5 +1,12 @@
 # Changelog
 
+## 6.2.0
+
+- A new settings window in the game's own Settings design, the same with any UI installed: the pages down the left (Threat, Glows, Display, Alerts, Overview, Status), gold setting names with the game's checkboxes, sliders (with arrows) and buttons, white section headings, a search box that jumps to any setting. Hover a setting for what it does.
+- The Bugs & Feedback window matches it.
+- The glows and the threat overview still follow FlareUI and EllesmereUI.
+- Tidied: the settings' old FlareUI / EllesmereUI styling is gone.
+
 ## 6.1.0
 
 - "Bugs & Feedback" now sits at the top right of the settings window, next to the ×. It opens a window (like Questie's trace export) with the form's link to copy at the top, for bug reports, feedback and feature requests, and for a bug, one line to paste into the form with your version, the game client, what Holdfast follows, its settings and the glows showing; never your name, realm or guild. Also `/hf report`. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
